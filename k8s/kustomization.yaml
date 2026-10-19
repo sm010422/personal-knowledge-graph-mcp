@@ -1,0 +1,19 @@
+# Synced by ArgoCD (Application "personal-kg" in sm010422/k3s-msa-infrastructure).
+# CI rewrites images[0].newTag after every successful build on main.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: personal-kg
+
+resources:
+  - namespace.yaml
+  - neo4j.yaml
+  - mcp-server.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+# Not listed on purpose:
+#   secret.example.yaml   — template only; the real Secret is created with kubectl (docs/deployment.md)
+#   cloudflare-tunnel/    — alternative exposure, enabled only once a Cloudflare domain exists
+
+images:
+  - name: sm010422/personal-knowledge-graph-mcp
+    newTag: "bootstrap"

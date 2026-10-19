@@ -1,0 +1,103 @@
+# Neo4j 5 Community, single instance.
+# Pinned to k3s-master: it has the most free memory (~1.6Gi after pausing the C4I apps)
+# and local-path volumes are bound to the node they were first created on anyway.
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  labels:
+    app: neo4j
+spec:
+  clusterIP: None # headless: governs the StatefulSet, resolves to the pod
+  selector:
+    app: neo4j
+  ports:
+    - name: bolt
+      port: 7687
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+  labels:
+    app: neo4j
+spec:
+  serviceName: neo4j
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [k3s-master]
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 7474
+      containers:
+        - name: neo4j
+          image: neo4j:5-community
+          ports:
+            - name: bolt
+              containerPort: 7687
+          env:
+            - name: NEO4J_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: personal-kg-secrets
+                  key: NEO4J_AUTH
+            # heap + page cache + ~250Mi JVM/native overhead must stay under the limit.
+            - name: NEO4J_server_memory_heap_initial__size
+              value: "384m"
+            - name: NEO4J_server_memory_heap_max__size
+              value: "384m"
+            - name: NEO4J_server_memory_pagecache_size
+              value: "128m"
+            - name: NEO4J_dbms_usage__report_enabled
+              value: "false"
+            # Browser UI (7474) is not needed in the cluster; keep only Bolt.
+            - name: NEO4J_server_http_enabled
+              value: "false"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 768Mi
+            limits:
+              memory: 1Gi
+          startupProbe:
+            tcpSocket:
+              port: bolt
+            periodSeconds: 5
+            failureThreshold: 60 # up to 5 minutes for first start on a small node
+          readinessProbe:
+            tcpSocket:
+              port: bolt
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: bolt
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 2Gi

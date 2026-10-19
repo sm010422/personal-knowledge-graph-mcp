@@ -1,0 +1,19 @@
+# Neo4j accepts Bolt only from the MCP server pods. Nothing else in the cluster
+# (or reaching it through Traefik) can talk to the database directly.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: neo4j-from-mcp-only
+spec:
+  podSelector:
+    matchLabels:
+      app: neo4j
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: personal-kg-mcp
+      ports:
+        - port: 7687
+          protocol: TCP

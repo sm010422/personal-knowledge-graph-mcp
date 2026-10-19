@@ -1,0 +1,19 @@
+# Only /mcp is routed. Traefik's port 80 is published to the internet by Tailscale Funnel
+# on k3s-master, so this becomes https://k3s-master.taildcdcee.ts.net/mcp.
+# The server rejects requests without a valid Bearer token (401).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: personal-kg-mcp
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: personal-kg-mcp
+                port:
+                  name: http

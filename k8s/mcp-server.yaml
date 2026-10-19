@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: personal-kg-mcp
+  labels:
+    app: personal-kg-mcp
+spec:
+  selector:
+    app: personal-kg-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: personal-kg-mcp
+  labels:
+    app: personal-kg-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: personal-kg-mcp
+  template:
+    metadata:
+      labels:
+        app: personal-kg-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: sm010422/personal-knowledge-graph-mcp # tag set by kustomization.yaml
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: MCP_TRANSPORT
+              value: http
+            - name: NEO4J_URI
+              value: bolt://neo4j:7687
+            - name: NEO4J_USER
+              value: neo4j
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: personal-kg-secrets
+                  key: NEO4J_PASSWORD
+            - name: MCP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: personal-kg-secrets
+                  key: MCP_AUTH_TOKEN
+            - name: MCP_AUTH_TOKEN_NEXT # only set while rotating (docs/deployment.md)
+              valueFrom:
+                secretKeyRef:
+                  name: personal-kg-secrets
+                  key: MCP_AUTH_TOKEN_NEXT
+                  optional: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          # /ready checks Neo4j; /health only checks the process. Neither needs a token.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
