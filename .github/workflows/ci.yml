@@ -1,0 +1,83 @@
+name: CI
+
+# Pipeline: lint + tests -> build arm64 image -> pin the new tag in k8s/ -> ArgoCD syncs.
+# See docs/adr/0008-image-delivery-by-manifest-commit.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: sm010422/personal-knowledge-graph-mcp
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.1"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # Integration tests start neo4j:5-community through Testcontainers on the runner's Docker.
+      - run: uv run pytest -v
+
+  build:
+    name: Build and push image (arm64)
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm # cluster nodes are arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Pin image tag in k8s/kustomization.yaml
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update newTag
+        run: |
+          sed -i -E "s/^(\s*newTag:).*/\1 \"${GITHUB_SHA}\"/" k8s/kustomization.yaml
+          git diff --exit-code k8s/kustomization.yaml && { echo "tag unchanged"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(deploy): pin image ${GITHUB_SHA::7} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
