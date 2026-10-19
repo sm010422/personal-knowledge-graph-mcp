@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Secrets — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Real personal data must never be committed (see docs/security.md)
+data/
+dumps/
+backups/
+*.dump
+*.backup
+seed/private/
+
+# Local Neo4j volumes
+neo4j/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
