@@ -7,6 +7,8 @@ for how well an LLM uses this graph.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable
 from datetime import date
 from importlib.metadata import version
@@ -16,6 +18,7 @@ from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.lifespan import lifespan
+from neo4j import AsyncDriver
 from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -39,6 +42,12 @@ from pkg_mcp.schema import (
 )
 
 T = TypeVar("T")
+
+logger = logging.getLogger("pkg_mcp")
+
+# How long a tool call waits for the database before giving up with a clear error.
+DB_WAIT_SECONDS = 10.0
+MAX_BACKOFF_SECONDS = 15.0
 
 INSTRUCTIONS = """\
 Long-term memory about the user, stored as a knowledge graph.
@@ -68,18 +77,45 @@ ProvenanceArg = Annotated[
 def create_server(settings: Settings | None = None, auth: AuthProvider | None = None) -> FastMCP:
     """Build the server. `auth` is required for HTTP mode and ignored by stdio."""
     state: dict[str, Any] = {}
+    db_ready = asyncio.Event()
+
+    async def connect(driver: AsyncDriver, database: str) -> None:
+        """Retry until Neo4j answers, then make sure the schema exists.
+
+        Runs in the background so the process starts even when the database is not
+        up yet — in Kubernetes the headless Service does not even resolve until the
+        Neo4j pod is Ready. Crashing instead would put the pod in CrashLoopBackOff
+        and delay recovery by minutes after the database is back.
+        """
+        attempt = 0
+        while True:
+            try:
+                await driver.verify_connectivity()
+                await bootstrap_schema(driver, database)
+            except Exception as exc:
+                attempt += 1
+                delay = min(2.0**attempt, MAX_BACKOFF_SECONDS)
+                logger.warning(
+                    "Neo4j not ready (attempt %d): %s; retry in %.0fs", attempt, exc, delay
+                )
+                await asyncio.sleep(delay)
+                continue
+            db_ready.set()
+            logger.info("Connected to Neo4j after %d retries", attempt)
+            return
 
     @lifespan
     async def graph_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         cfg = settings or Settings()  # type: ignore[call-arg]
         driver = create_driver(cfg)
+        state["driver"] = driver
+        task = asyncio.create_task(connect(driver, cfg.neo4j_database))
         try:
-            await driver.verify_connectivity()
-            await bootstrap_schema(driver, cfg.neo4j_database)
-            state["driver"] = driver
             yield {"graph": KnowledgeGraph(driver, cfg.neo4j_database)}
         finally:
+            task.cancel()
             state.clear()
+            db_ready.clear()
             await driver.close()
 
     mcp = FastMCP(
@@ -99,7 +135,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     @mcp.custom_route("/ready", methods=["GET"])
     async def ready(request: Request) -> JSONResponse:
         driver = state.get("driver")
-        if driver is None:
+        if driver is None or not db_ready.is_set():
             return JSONResponse({"status": "starting"}, status_code=503)
         try:
             await driver.verify_connectivity()
@@ -107,7 +143,14 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             return JSONResponse({"status": "neo4j unreachable"}, status_code=503)
         return JSONResponse({"status": "ok"})
 
-    def graph(ctx: Context) -> KnowledgeGraph:
+    async def graph(ctx: Context) -> KnowledgeGraph:
+        try:
+            await asyncio.wait_for(db_ready.wait(), timeout=DB_WAIT_SECONDS)
+        except TimeoutError:
+            raise ToolError(
+                "The knowledge graph database is not reachable yet (starting up or down). "
+                "Tell the user memory is temporarily unavailable; retry later."
+            ) from None
         return ctx.lifespan_context["graph"]
 
     async def call(op: Awaitable[T]) -> T:
@@ -145,7 +188,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         Changed values are kept in history; nothing is silently overwritten.
         Upserting a soft-deleted name restores it. Do not use for one-off chat details.
         """
-        return await call(graph(ctx).upsert_entity(type, name, properties, aliases, provenance))
+        return await call(
+            (await graph(ctx)).upsert_entity(type, name, properties, aliases, provenance)
+        )
 
     @mcp.tool
     async def add_relation(
@@ -182,7 +227,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         so the history is preserved. Same properties again is a no-op.
         """
         return await call(
-            graph(ctx).add_relation(
+            (await graph(ctx)).add_relation(
                 from_entity,
                 relation_type,
                 to_entity,
@@ -209,7 +254,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         Prefer this over delete_entity when something merely ended.
         """
         return await call(
-            graph(ctx).end_relation(from_entity, relation_type, to_entity, valid_to=valid_to)
+            (await graph(ctx)).end_relation(
+                from_entity, relation_type, to_entity, valid_to=valid_to
+            )
         )
 
     @mcp.tool
@@ -231,7 +278,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         If the fact has a clear shape (a status, a date, a link between two things),
         use upsert_entity or add_relation instead so it can be queried.
         """
-        return await call(graph(ctx).add_note(content, about_entities, source, provenance))
+        return await call((await graph(ctx)).add_note(content, about_entities, source, provenance))
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def get_context(
@@ -251,7 +298,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         or decision. Use depth=2 for broader questions like "what is my stack across
         projects". If you do not know the exact name, call search first.
         """
-        result = await call(graph(ctx).get_context(entity_name, depth, None, include_history))
+        result = await call(
+            (await graph(ctx)).get_context(entity_name, depth, None, include_history)
+        )
         return render_context(result)
 
     @mcp.tool(annotations={"readOnlyHint": True})
@@ -269,7 +318,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         Use when you don't know the exact entity name, or to check whether something
         already exists before creating it. Exact name matches rank first.
         """
-        return await call(graph(ctx).search(query, types, include_notes, limit))
+        return await call((await graph(ctx)).search(query, types, include_notes, limit))
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def list_entities(
@@ -286,7 +335,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         Use for enumerations: "what projects am I running", "which companies did I
         apply to". For a single entity's details use get_context instead.
         """
-        return await call(graph(ctx).list_entities(type, filters, limit))
+        return await call((await graph(ctx)).list_entities(type, filters, limit))
 
     @mcp.tool(annotations={"destructiveHint": True})
     async def delete_entity(
@@ -313,7 +362,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         a status property instead. Always call with confirm=false first and confirm
         with the user.
         """
-        return await call(graph(ctx).delete_entity(entity_name, confirm, hard))
+        return await call((await graph(ctx)).delete_entity(entity_name, confirm, hard))
 
     return mcp
 

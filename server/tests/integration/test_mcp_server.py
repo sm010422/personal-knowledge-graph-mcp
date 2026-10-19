@@ -62,3 +62,20 @@ async def test_record_and_recall_round_trip(client: Client) -> None:
 async def test_domain_errors_reach_the_model(client: Client) -> None:
     with pytest.raises(ToolError, match="upsert_entity to create it first"):
         await client.call_tool("get_context", {"entity_name": "Nobody"})
+
+
+async def test_server_starts_without_database_and_reports_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The process must not crash when Neo4j is not up yet (pod start ordering)."""
+    import pkg_mcp.server as server_module
+
+    monkeypatch.setattr(server_module, "DB_WAIT_SECONDS", 0.5)
+    settings = Settings(
+        neo4j_uri="bolt://127.0.0.1:1",  # nothing listens here
+        neo4j_password=SecretStr("unused"),
+    )
+    async with Client(create_server(settings)) as c:
+        assert {t.name for t in await c.list_tools()} == EXPECTED_TOOLS
+        with pytest.raises(ToolError, match="not reachable yet"):
+            await c.call_tool("search", {"query": "anything"})

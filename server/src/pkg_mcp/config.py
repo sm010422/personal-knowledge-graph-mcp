@@ -25,6 +25,4 @@ class Settings(BaseSettings):
     mcp_auth_token_next: SecretStr | None = None
 
     def auth_tokens(self) -> list[str]:
-        return [
-            t.get_secret_value() for t in (self.mcp_auth_token, self.mcp_auth_token_next) if t
-        ]
+        return [t.get_secret_value() for t in (self.mcp_auth_token, self.mcp_auth_token_next) if t]
