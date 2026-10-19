@@ -129,6 +129,7 @@ docker-compose.yml        로컬 Neo4j
 ## 문서
 
 - [아키텍처](docs/architecture.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md)
+- [할 일 · 알아둘 점](docs/TODO.md) — 현재 상태, 주의사항, 우선순위별 할 일
 - [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
 - 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md)
