@@ -9,13 +9,18 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable
 from datetime import date
+from importlib.metadata import version
 from typing import Annotated, Any, Literal, TypeVar
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server.auth import AuthProvider
 from fastmcp.server.lifespan import lifespan
 from pydantic import Field
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
+from pkg_mcp.auth import SharedTokenVerifier
 from pkg_mcp.config import Settings
 from pkg_mcp.db import bootstrap_schema, create_driver
 from pkg_mcp.errors import KnowledgeGraphError
@@ -60,7 +65,10 @@ ProvenanceArg = Annotated[
 ]
 
 
-def create_server(settings: Settings | None = None) -> FastMCP:
+def create_server(settings: Settings | None = None, auth: AuthProvider | None = None) -> FastMCP:
+    """Build the server. `auth` is required for HTTP mode and ignored by stdio."""
+    state: dict[str, Any] = {}
+
     @lifespan
     async def graph_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         cfg = settings or Settings()  # type: ignore[call-arg]
@@ -68,11 +76,36 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         try:
             await driver.verify_connectivity()
             await bootstrap_schema(driver, cfg.neo4j_database)
+            state["driver"] = driver
             yield {"graph": KnowledgeGraph(driver, cfg.neo4j_database)}
         finally:
+            state.clear()
             await driver.close()
 
-    mcp = FastMCP("personal-knowledge-graph", instructions=INSTRUCTIONS, lifespan=graph_lifespan)
+    mcp = FastMCP(
+        "personal-knowledge-graph",
+        version=version("pkg-mcp"),
+        instructions=INSTRUCTIONS,
+        lifespan=graph_lifespan,
+        auth=auth,
+    )
+
+    # Probes for Kubernetes. Custom routes sit outside the MCP endpoint, so they
+    # need no token; they reveal nothing beyond up/down.
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
+    @mcp.custom_route("/ready", methods=["GET"])
+    async def ready(request: Request) -> JSONResponse:
+        driver = state.get("driver")
+        if driver is None:
+            return JSONResponse({"status": "starting"}, status_code=503)
+        try:
+            await driver.verify_connectivity()
+        except Exception:
+            return JSONResponse({"status": "neo4j unreachable"}, status_code=503)
+        return JSONResponse({"status": "ok"})
 
     def graph(ctx: Context) -> KnowledgeGraph:
         return ctx.lifespan_context["graph"]
@@ -286,7 +319,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
 
 def main() -> None:
-    create_server().run(show_banner=False)  # stdio by default
+    settings = Settings()  # type: ignore[call-arg]
+    if settings.mcp_transport == "stdio":
+        # The client spawned us; no network listener, so no auth.
+        create_server(settings).run(show_banner=False)
+        return
+
+    tokens = settings.auth_tokens()
+    if not tokens:
+        raise SystemExit("MCP_AUTH_TOKEN is required when MCP_TRANSPORT=http.")
+    server = create_server(settings, auth=SharedTokenVerifier(tokens))
+    server.run(
+        transport="http",
+        host=settings.mcp_host,
+        port=settings.mcp_port,
+        path=settings.mcp_path,
+        # No per-session server state, so any replica can answer any request and a
+        # pod restart does not invalidate clients' sessions.
+        stateless_http=True,
+        show_banner=False,
+    )
 
 
 if __name__ == "__main__":
