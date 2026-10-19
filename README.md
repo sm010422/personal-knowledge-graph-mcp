@@ -5,14 +5,15 @@ Claude(claude.ai / Claude Desktop / Claude Code)가 사용자에 대한 장기 �
 
 ```mermaid
 flowchart LR
-    C[Claude Desktop / Code] -- "MCP (stdio)" --> S[MCP Server<br/>Python · FastMCP]
-    W[claude.ai] -. "Streamable HTTP + 토큰 (Phase 2)" .-> S
-    S -- Bolt --> N[(Neo4j 5)]
+    D[Claude Desktop / Code] -- "stdio (로컬)" --> L[MCP Server] -- Bolt --> LN[(Neo4j<br/>docker compose)]
+    C[Claude Code] -- "HTTPS + Bearer 토큰" --> F[Tailscale Funnel] --> T[Traefik /mcp] --> S[MCP Server<br/>k3s] -- Bolt --> N[(Neo4j<br/>StatefulSet)]
 ```
 
 - **언어**: Python 3.12 + [FastMCP](https://gofastmcp.com)
 - **DB**: Neo4j 5 Community
-- **배포 (Phase 2~)**: 홈 k3s 클러스터([k3s-msa-infrastructure](https://github.com/sm010422/k3s-msa-infrastructure)), 외부 노출은 Cloudflare Tunnel
+- **배포**: 홈 k3s 클러스터([k3s-msa-infrastructure](https://github.com/sm010422/k3s-msa-infrastructure)), ArgoCD GitOps
+  - 공개 엔드포인트: `https://k3s-master.taildcdcee.ts.net/mcp` (토큰 필수)
+  - CI: GitHub Actions → arm64 이미지 → 매니페스트 태그 커밋 → ArgoCD sync
 
 ## 툴
 
@@ -52,7 +53,16 @@ uv run --project server python scripts/seed_example.py   # 선택: 가상 예시
 
 서버는 실행 위치(cwd)의 `.env`를 읽는다. Claude가 서버를 띄울 때는 cwd가 저장소 루트가 아니므로, 아래처럼 환경변수를 직접 넘긴다.
 
-### Claude Code에 연결
+### Claude Code에 연결 — 클러스터의 원격 서버 (권장)
+
+토큰은 클러스터 Secret을 만들 때 로컬 `.env.remote`(git-ignored)에 저장해 둔 값이다([deployment.md](docs/deployment.md#secret-생성-최초-1회)).
+
+```bash
+source .env.remote
+claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: Bearer $MCP_AUTH_TOKEN"
+```
+
+### Claude Code에 연결 — 로컬 stdio
 
 ```bash
 claude mcp add personal-kg \
@@ -93,8 +103,10 @@ uv run ruff check . && uv run ruff format --check .
 
 ```
 server/                 MCP 서버 (uv 프로젝트)
+  Dockerfile            arm64, non-root 이미지
   src/pkg_mcp/
-    server.py           툴 정의, lifespan, stdio 진입점
+    server.py           툴 정의, lifespan(백그라운드 DB 연결), 프로브, stdio/http 진입점
+    auth.py             HTTP 모드 Bearer 토큰 검증
     repository.py       Cypher 계층 — 엔티티 해석, 이력, 검색
     schema.py           엔티티/관계 어휘, 관계 방향 규칙, 반환 모델
     policy.py           민감정보 저장 차단
@@ -105,6 +117,11 @@ docs/
   architecture.md  schema.md  security.md
   adr/              설계 결정 기록
   devlog/           진행 과정 기록
+k8s/                    클러스터 매니페스트 (ArgoCD가 sync)
+  neo4j.yaml  mcp-server.yaml  ingress.yaml  networkpolicy.yaml  kustomization.yaml
+  secret.example.yaml   템플릿만 — 실제 Secret은 kubectl로 생성
+  cloudflare-tunnel/    비활성, 도메인 생기면 전환
+.github/workflows/ci.yml  test → arm64 build → 태그 커밋
 scripts/seed_example.py   가상 인물 예시 데이터
 docker-compose.yml        로컬 Neo4j
 ```
@@ -112,13 +129,16 @@ docker-compose.yml        로컬 Neo4j
 ## 문서
 
 - [아키텍처](docs/architecture.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md)
+- [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
-- [진행 기록: Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md)
+- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md)
 
 ## 로드맵
 
 1. **Phase 1** — 로컬: docker-compose + stdio 모드 + 핵심 툴 + 통합 테스트 ✅
-2. Phase 2 — HTTP 모드 + 토큰 인증 + k3s 배포 + Cloudflare Tunnel
+2. **Phase 2** — HTTP 모드 + 토큰 인증 + k3s 배포 + 외부 노출 ✅
+   - 외부 노출은 Tailscale Funnel로 했다. Cloudflare Tunnel은 준비만 해 두었다([ADR-0009](docs/adr/0009-expose-via-tailscale-funnel.md)).
+   - CI 자동 배포는 `DOCKERHUB_TOKEN` 설정 후 활성화된다.
 3. Phase 3 — Prometheus 메트릭(툴 호출 수/지연/에러), Grafana 대시보드, 백업 CronJob
 4. Phase 4 — 대화 텍스트에서 LLM으로 엔티티/관계 자동 추출, 시간축 질의
 

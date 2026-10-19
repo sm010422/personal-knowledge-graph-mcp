@@ -28,7 +28,18 @@
 ## 네트워크 노출
 
 - **Phase 1 (stdio)**: 서버는 포트를 열지 않는다. Neo4j도 `127.0.0.1`에만 바인딩한다(`docker-compose.yml`).
-- **Phase 2 (HTTP)**: 인증 없는 엔드포인트는 노출하지 않는다. Bearer 토큰 → OAuth 순으로 검토하고, 외부 노출은 Cloudflare Tunnel로만 한다.
+- **Phase 2 (HTTP, k3s)**: 공개 URL `https://k3s-master.taildcdcee.ts.net/mcp`. 노출 면과 방어선은 이렇다.
+
+| 계층 | 방어 |
+|---|---|
+| 전송 | Tailscale Funnel이 TLS를 종료한다(Let's Encrypt 자동 인증서) |
+| 라우팅 | Ingress는 `/mcp`만 연다. `/health`·`/ready`와 Neo4j는 외부에서 닿지 않는다 |
+| 인증 | 공유 Bearer 토큰, 상수 시간 비교, 32자 이상 강제. 토큰 없음·틀림은 401 ([ADR-0007](adr/0007-bearer-token-auth.md)) |
+| 클러스터 내부 | NetworkPolicy: Neo4j 7687은 MCP 서버 파드에서만 접근할 수 있다. 다른 파드는 차단된다(실측) |
+| 컨테이너 | non-root(uid 10001), 읽기 전용 루트 FS, capability 전부 제거, seccomp RuntimeDefault |
+| 시크릿 | `kubectl create secret`으로만 생성한다. git에는 `secret.example.yaml` 템플릿만 있다. 클라이언트용 토큰 사본은 로컬 `.env.remote`(git-ignored, 600) |
+
+**주의**: Funnel은 Traefik 80번 **전체**를 공개한다. 이 클러스터에 Ingress를 새로 추가하면 그 경로도 바로 인터넷에 열린다. 인증 없는 서비스에 Ingress를 붙이지 말 것.
 
 ## 삭제 요청
 

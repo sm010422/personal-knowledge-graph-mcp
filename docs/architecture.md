@@ -11,6 +11,7 @@ flowchart LR
     end
     subgraph Server["MCP Server (Python, FastMCP)"]
         T[Tools<br/>server.py]
+        A[SharedTokenVerifier<br/>auth.py]
         R[KnowledgeGraph<br/>repository.py]
         P[Policy guard<br/>policy.py]
         F[Context renderer<br/>formatting.py]
@@ -19,7 +20,8 @@ flowchart LR
 
     CD -- "stdio (Phase 1)" --> T
     CC -- "stdio (Phase 1)" --> T
-    CA -. "Streamable HTTP + 토큰 (Phase 2)" .-> T
+    CA -. "Streamable HTTP + 토큰 (Phase 2, OAuth 필요)" .-> T
+    CC -- "Streamable HTTP + Bearer (Phase 2)" --> T
     T --> R
     R --> P
     T --> F
@@ -30,7 +32,8 @@ flowchart LR
 
 | 계층 | 파일 | 책임 |
 |---|---|---|
-| 툴 | `server.py` | MCP 툴 시그니처와 description, 도메인 에러 → `ToolError` 변환, lifespan(드라이버 생성·스키마 부트스트랩·종료) |
+| 툴 | `server.py` | MCP 툴 시그니처와 description, 도메인 에러 → `ToolError` 변환, lifespan(드라이버 생성·백그라운드 연결·종료), `/health`·`/ready` |
+| 인증 | `auth.py` | HTTP 모드 Bearer 토큰 검증(상수 시간 비교, 교체용 토큰 2개) |
 | 도메인/저장소 | `repository.py` | 엔티티 해석(이름·alias·`Type:` 접두사), 이력 관리, Cypher 실행. 모든 쓰기는 하나의 트랜잭션 함수 안에서 끝난다 |
 | 어휘 | `schema.py` | EntityType / RelationType enum, 관계 허용 규칙, 반환 모델 |
 | 정책 | `policy.py` | 민감정보 키·값 패턴 차단 |
@@ -52,7 +55,11 @@ flowchart LR
 ## 전송 방식
 
 - **Phase 1 — stdio**: Claude Desktop/Code가 서버를 자식 프로세스로 띄운다. 네트워크에 열리는 포트가 없으므로 인증이 필요 없다. 이 때문에 `docker-compose.yml`에는 Neo4j만 있다. 서버를 컨테이너로 띄우면 클라이언트가 stdio로 붙을 수 없기 때문이다.
-- **Phase 2 — Streamable HTTP**: 같은 `create_server()`를 `run(transport="http")`로 띄우고 Bearer 토큰 인증을 붙인다. k3s에 배포하고 Cloudflare Tunnel로 노출한다.
+- **Phase 2 — Streamable HTTP**: 같은 `create_server()`를 `MCP_TRANSPORT=http`로 띄운다. `SharedTokenVerifier`가 `/mcp`를 보호하고, stateless 모드라 파드가 재시작돼도 세션이 깨지지 않는다. k3s에 배포하고 Tailscale Funnel로 노출한다. 세부 내용은 [deployment.md](deployment.md).
+
+## 시작과 DB 연결
+
+서버는 DB 연결을 기다리지 않고 바로 뜬다. lifespan이 드라이버를 만들고, 연결과 스키마 부트스트랩은 백그라운드 태스크가 지수 백오프로 재시도한다. 연결 전에는 `/ready`가 503이다. 그동안 툴 호출은 최대 10초 기다린 뒤 "DB 연결 안 됨" 에러를 낸다. 클러스터에서 Neo4j보다 먼저 떠도 죽지 않게 하기 위한 구조다. 첫 배포 때 겪은 CrashLoopBackOff가 계기다([ADR-0010](adr/0010-background-db-connect.md)).
 
 ## 운영 관련 결정
 
