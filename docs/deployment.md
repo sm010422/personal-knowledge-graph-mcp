@@ -1,6 +1,6 @@
 # 배포 · 운영 가이드 (Phase 2)
 
-홈 k3s 클러스터에 MCP 서버와 Neo4j를 배포하고, 인터넷에서 토큰으로 접근하게 만든 구성과 운영 절차다. 진행 과정과 겪은 문제는 [devlog](devlog/2026-10-19-phase2-k3s-deployment.md)에 따로 있다.
+홈 k3s 클러스터에 MCP 서버와 Neo4j를 배포하고, 인터넷에서 토큰으로 접근하게 만든 구성과 운영 절차다. 진행 과정과 겪은 문제는 devlog([Phase 2](devlog/2026-10-19-phase2-k3s-deployment.md), [백업·첫 사용](devlog/2026-10-27-backup-and-first-use.md))에 따로 있다. 요청이 흐르는 경로는 [request-flow.md](request-flow.md)에 있다.
 
 ## 전체 구성
 
@@ -8,6 +8,7 @@
 flowchart TB
     subgraph Internet
         CC[Claude Code<br/>Authorization: Bearer ...]
+        CD[Claude 데스크톱 앱<br/>via mcp-remote]
     end
     subgraph TS["Tailscale Funnel (k3s-master)"]
         F["https://k3s-master.taildcdcee.ts.net<br/>TLS 종료 → localhost:80"]
@@ -21,8 +22,9 @@ flowchart TB
             N[(neo4j-0<br/>StatefulSet · :7687)]
             PV[(PVC data-neo4j-0<br/>local-path 2Gi)]
         end
-        S[[Secret<br/>personal-kg-secrets]]
-        NP{{NetworkPolicy<br/>neo4j ← mcp만}}
+        S[[Secret<br/>personal-kg-secrets<br/>personal-kg-backup]]
+        NP{{NetworkPolicy<br/>neo4j ← mcp, backup}}
+        BK[CronJob neo4j-backup<br/>04:00 KST]
     end
     subgraph GH[GitHub]
         R[personal-knowledge-graph-mcp<br/>k8s/]
@@ -31,7 +33,11 @@ flowchart TB
     DH[(Docker Hub<br/>sm010422/personal-knowledge-graph-mcp)]
     AR[ArgoCD<br/>Application personal-kg]
 
+    B2[(Backblaze B2<br/>암호화 백업)]
     CC --> F --> T --> M
+    CD --> F
+    BK -- Bolt --> N
+    BK -- rclone crypt --> B2
     M -- Bolt --> N --- PV
     S -.-> M & N
     NP -.- N

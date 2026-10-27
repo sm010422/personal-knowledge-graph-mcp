@@ -1,6 +1,6 @@
 # 할 일 목록
 
-기준일: 2026-10-19 (Phase 2 배포 직후). 끝난 항목은 체크하고, 관련 커밋이나 문서를 옆에 적는다.
+기준일: 2026-10-28 (백업·클라이언트 연결 후). 이전 기준 2026-10-19. 끝난 항목은 체크하고, 관련 커밋이나 문서를 옆에 적는다.
 
 담당 표시: **[나]** = 직접 해야 함(계정·권한·결정 필요) · **[Claude]** = 요청하면 진행 가능
 
@@ -17,6 +17,8 @@
 | 배포된 이미지 | `k8s/kustomization.yaml`의 `newTag` (커밋 SHA) |
 | CI | test ✅ / build ✅ / 태그 커밋 ✅ (2026-10-27 활성화) |
 | 백업 | CronJob `neo4j-backup` 매일 04:00 KST → B2 (암호화, 30일 보관) |
+| 클라이언트 | Claude Code(user scope, HTTP) · Claude 데스크톱 앱(mcp-remote) — 같은 클러스터 DB |
+| 데이터 | 2026-10-28 첫 적재(노드 약 50개). 그래프 보기: `scripts/graph-browser.sh` |
 | 토큰 위치 | 클러스터 Secret `personal-kg-secrets` + 이 Mac의 `.env.remote` 두 곳뿐 |
 | 기존 C4I 앱 | replicas 0으로 중지 중 (`244a066`), 헬스체크 워크플로 비활성 |
 | 로컬 | Colima 실행 중, 로컬 Neo4j `pkg-neo4j`(가상 데이터만) 실행 중 |
@@ -135,6 +137,13 @@ claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: 
 - [ ] 선택지: (a) personal-kg 엔드포인트만 확인하는 새 워크플로(공개 URL에 토큰 없이 요청해서 401이면 정상) (b) Grafana alert → ntfy
 - [ ] C4I 앱 복구 여부(10번)와 함께 결정
 
+### 7-2. Sentry 에러 추적 **[나: 계정 / Claude: 구현]**
+- [ ] Sentry SaaS 무료 플랜(Developer). self-hosted는 메모리가 수 GB 필요해서 이 클러스터에 못 올린다
+- [ ] `sentry-sdk` 초기화는 `SENTRY_DSN`이 있을 때만. DSN은 Secret에 둔다
+- [ ] **개인 데이터 차단이 핵심**: `send_default_pii=False`, `include_local_variables=False`, 요청 본문 미첨부, `before_send`에서 툴 인자·예외 메시지 속 값 제거. 툴 이름과 에러 타입만 남긴다
+- [ ] 도메인 에러(엔티티 없음, 관계 규칙 위반)는 정상 흐름이라 보내지 않는다. 예상 못 한 예외만
+- [ ] 백업 CronJob 실패도 Sentry Crons(체크인)로 감시 → 7-1 백업 실패 알림과 같이 해결
+
 ### 8. 로깅 정리 **[Claude]**
 - [ ] 현재 `logger.info("Connected to Neo4j ...")`가 기본 로깅 설정에서 안 보인다(ADR-0010 남은 점)
 - [ ] 구조화(JSON) 로그. 툴 이름, 소요 시간, 결과 상태를 남기되 **툴 인자 내용(개인 데이터)은 로그에 남기지 않는다**
@@ -179,6 +188,15 @@ gitnexus(약 1.27GB)와 Neo4j가 둘 다 k3s-master에 고정돼 있어서, `git
 - [ ] GitNexus 인덱스가 오래됐다는 경고 → `gitnexus analyze --index-only` (선택)
 
 ---
+
+## 🧪 실험 (이 프로젝트 밖, 클러스터 단위)
+
+### 16. Istio 서비스 메시 **[나 + Claude]**
+personal-kg에 꼭 필요한 기능은 아니다. 서비스가 2개(MCP 서버, Neo4j)이고 Neo4j는 HTTP가 아니라 Bolt(TCP)라서 Istio의 L7 기능(재시도, 트래픽 분할, HTTP 지표)은 MCP 서버 쪽에만 의미가 있다. 배우는 목적으로는 좋다: mTLS, Kiali로 요청 흐름 시각화, 카나리 배포.
+- [ ] 메모리 확인이 먼저다. master 66%. **sidecar 모드는 파드마다 프록시가 붙어 부담이 크다 → ambient 모드(노드당 ztunnel)** 권장
+- [ ] k3s-msa-infrastructure 레포에서 클러스터 단위로 설치·관리(ArgoCD). Traefik은 그대로 입구로 두고 메시 안쪽만 Istio
+- [ ] 이 프로젝트는 namespace에 ambient 라벨만 붙이는 사용자가 된다. 적용 전후 지연과 메모리를 재서 devlog로 남긴다
+- [ ] NetworkPolicy와 Istio AuthorizationPolicy가 겹치는 부분을 정리한다
 
 ## 🟣 Phase 4 (나중)
 - [ ] 대화 텍스트에서 LLM으로 엔티티·관계 자동 추출 → `provenance: inferred`, `confidence`로 적재

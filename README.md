@@ -5,8 +5,10 @@ Claude(claude.ai / Claude Desktop / Claude Code)가 사용자에 대한 장기 �
 
 ```mermaid
 flowchart LR
-    D[Claude Desktop / Code] -- "stdio (로컬)" --> L[MCP Server] -- Bolt --> LN[(Neo4j<br/>docker compose)]
     C[Claude Code] -- "HTTPS + Bearer 토큰" --> F[Tailscale Funnel] --> T[Traefik /mcp] --> S[MCP Server<br/>k3s] -- Bolt --> N[(Neo4j<br/>StatefulSet)]
+    D[Claude 데스크톱 앱] -- stdio --> MR[mcp-remote] -- "HTTPS + Bearer 토큰" --> F
+    BK[백업 CronJob] -- Bolt --> N
+    BK -- 암호화 --> B2[(Backblaze B2)]
 ```
 
 - **언어**: Python 3.12 + [FastMCP](https://gofastmcp.com)
@@ -70,7 +72,25 @@ claude mcp add personal-kg \
   -- uv run --project /절대경로/personal-knowledge-graph-mcp/server pkg-mcp
 ```
 
-### Claude Desktop에 연결
+### Claude 데스크톱 앱에 연결 — 클러스터의 원격 서버 (권장)
+
+앱 설정에는 HTTP 헤더를 넣을 칸이 없다. 그래서 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote)가 stdio로 앱과 붙고, 토큰을 붙여서 원격 HTTP로 중계한다. `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 추가하고 앱을 ⌘Q로 재시작한다.
+
+```json
+"personal-kg": {
+  "command": "npx",
+  "args": ["-y", "mcp-remote", "https://k3s-master.taildcdcee.ts.net/mcp",
+           "--header", "Authorization:${AUTH_HEADER}"],
+  "env": { "AUTH_HEADER": "Bearer <.env.remote의 MCP_AUTH_TOKEN>" }
+}
+```
+
+- `Authorization:${AUTH_HEADER}`는 공백 없이 그대로 둔다. 인자에 공백이 있으면 앱이 인자를 잘못 나눈다.
+- 로그: `~/Library/Logs/Claude/mcp-server-personal-kg.log`. `npm error EACCES`가 나오면 `~/.npm`에 root 소유 파일이 있는 것이다 → `sudo chown -R 501:20 ~/.npm`.
+
+### Claude Desktop에 연결 — 로컬 stdio (개발용)
+
+로컬 docker compose Neo4j에 붙는다. 클러스터 DB와는 **다른 DB**라서 실사용에는 원격 하나만 쓴다.
 
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -131,11 +151,11 @@ docker-compose.yml        로컬 Neo4j
 
 ## 문서
 
-- [아키텍처](docs/architecture.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md)
+- [아키텍처](docs/architecture.md) · [요청 흐름 다이어그램](docs/request-flow.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md)
 - [할 일 · 알아둘 점](docs/TODO.md) — 현재 상태, 주의사항, 우선순위별 할 일
 - [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
-- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md)
+- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [백업·첫 사용](docs/devlog/2026-10-27-backup-and-first-use.md)
 
 ## 로드맵
 

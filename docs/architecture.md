@@ -18,15 +18,16 @@ flowchart LR
     end
     DB[(Neo4j 5<br/>Community)]
 
-    CD -- "stdio (Phase 1)" --> T
-    CC -- "stdio (Phase 1)" --> T
-    CA -. "Streamable HTTP + 토큰 (Phase 2, OAuth 필요)" .-> T
-    CC -- "Streamable HTTP + Bearer (Phase 2)" --> T
+    CD -- "stdio → mcp-remote → HTTP + Bearer" --> T
+    CC -- "Streamable HTTP + Bearer" --> T
+    CA -. "OAuth 필요 (미연결)" .-> T
     T --> R
     R --> P
     T --> F
     R -- Bolt --> DB
 ```
+
+요청이 클러스터를 거쳐 가는 경로, 백업·배포 경로는 [request-flow.md](request-flow.md)에 다이어그램으로 있다.
 
 ## 계층
 
@@ -55,6 +56,7 @@ flowchart LR
 ## 전송 방식
 
 - **Phase 1 — stdio**: Claude Desktop/Code가 서버를 자식 프로세스로 띄운다. 네트워크에 열리는 포트가 없으므로 인증이 필요 없다. 이 때문에 `docker-compose.yml`에는 Neo4j만 있다. 서버를 컨테이너로 띄우면 클라이언트가 stdio로 붙을 수 없기 때문이다.
+- **데스크톱 앱 → 원격**: 앱 설정에는 HTTP 헤더를 넣을 수 없다. 그래서 `npx mcp-remote <URL> --header Authorization:${AUTH_HEADER}`를 stdio 서버로 등록한다. mcp-remote가 토큰을 붙여 원격 HTTP로 중계한다.
 - **Phase 2 — Streamable HTTP**: 같은 `create_server()`를 `MCP_TRANSPORT=http`로 띄운다. `SharedTokenVerifier`가 `/mcp`를 보호하고, stateless 모드라 파드가 재시작돼도 세션이 깨지지 않는다. k3s에 배포하고 Tailscale Funnel로 노출한다. 세부 내용은 [deployment.md](deployment.md).
 
 ## 시작과 DB 연결
