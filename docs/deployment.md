@@ -266,6 +266,16 @@ git log --oneline -- k8s/kustomization.yaml     # 이전 배포 SHA 찾기
 
 ArgoCD Application을 지우면 `prune: true` 때문에 PVC까지 지워질 수 있다. 내리고 싶을 때는 Application을 지우지 말 것.
 
+### 그래프 보기 (Neo4j Browser)
+
+DB를 외부에 열지 않고 port-forward로만 본다. `scripts/graph-browser.sh`가 터널을 열고 Neo4j 비밀번호를 클립보드에 복사한다.
+
+```bash
+scripts/graph-browser.sh            # 이후 https://browser.neo4j.io 에서 neo4j://localhost:7687 로 접속
+```
+
+여기서는 조회만 한다. Browser에서 직접 쓰면 MCP 서버의 검증(관계 규칙, 민감정보 차단)과 이력(Revision)을 건너뛴다.
+
 ### 백업과 복구
 
 매일 04:00 KST에 CronJob `neo4j-backup`이 그래프 전체를 덤프한다. rclone crypt로 암호화한 뒤 Backblaze B2 버킷의 `neo4j/` 아래에 올리고, 30일 넘은 백업은 지운다. 결정 근거는 [ADR-0011](adr/0011-logical-backup-to-b2.md)에 있다.
