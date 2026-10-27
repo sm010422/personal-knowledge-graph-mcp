@@ -1,0 +1,141 @@
+# Daily logical backup of Neo4j to Backblaze B2, encrypted client-side.
+#   1. init container `export` (the server image) dumps the graph over Bolt to an emptyDir
+#   2. container `upload` (rclone) encrypts with rclone crypt, uploads, prunes old copies
+# Restore and rehearsal: docs/deployment.md "백업과 복구". Decision: ADR-0011.
+#
+# Needs the Secret personal-kg-backup, created with kubectl (never committed):
+#   kubectl create secret generic personal-kg-backup -n personal-kg \
+#     --from-literal=B2_BUCKET=... --from-literal=B2_KEY_ID=... \
+#     --from-literal=B2_APPLICATION_KEY=... \
+#     --from-literal=BACKUP_PASSWORD_OBSCURED="$(rclone obscure "$BACKUP_PASSPHRASE")"
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: neo4j-backup
+  labels:
+    app: personal-kg-backup
+spec:
+  schedule: "0 4 * * *"
+  timeZone: Asia/Seoul
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app: personal-kg-backup # allowed to reach Bolt by networkpolicy.yaml
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: export
+              image: sm010422/personal-knowledge-graph-mcp # tag set by kustomization.yaml
+              command:
+                - sh
+                - -c
+                - exec pkg-mcp-backup export "/backup/neo4j-$(date -u +%Y%m%dT%H%MZ).jsonl.gz"
+              env:
+                - name: NEO4J_URI
+                  value: bolt://neo4j:7687
+                - name: NEO4J_USER
+                  value: neo4j
+                - name: NEO4J_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-secrets
+                      key: NEO4J_PASSWORD
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 96Mi
+                limits:
+                  memory: 256Mi
+              securityContext: &hardened
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          containers:
+            - name: upload
+              image: rclone/rclone:1.75.2
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  rclone copy /backup backup: --include 'neo4j-*.jsonl.gz' --stats-one-line -v
+                  # Only reached after a successful upload, so a failing job never
+                  # deletes the copies it would otherwise replace.
+                  rclone delete backup: --include 'neo4j-*.jsonl.gz' --min-age 30d -v
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: B2_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-backup
+                      key: B2_BUCKET
+                # Remote "b2": the bucket. hard_delete so pruned files do not linger as
+                # hidden versions that still count towards storage.
+                - name: RCLONE_CONFIG_B2_TYPE
+                  value: b2
+                - name: RCLONE_CONFIG_B2_ACCOUNT
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-backup
+                      key: B2_KEY_ID
+                - name: RCLONE_CONFIG_B2_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-backup
+                      key: B2_APPLICATION_KEY
+                - name: RCLONE_CONFIG_B2_HARD_DELETE
+                  value: "true"
+                # Remote "backup": encrypts contents on top of "b2". File names stay
+                # readable (only timestamps) so pruning by name and age works.
+                - name: RCLONE_CONFIG_BACKUP_TYPE
+                  value: crypt
+                - name: RCLONE_CONFIG_BACKUP_REMOTE
+                  value: b2:$(B2_BUCKET)/neo4j
+                - name: RCLONE_CONFIG_BACKUP_FILENAME_ENCRYPTION
+                  value: "off"
+                - name: RCLONE_CONFIG_BACKUP_DIRECTORY_NAME_ENCRYPTION
+                  value: "false"
+                - name: RCLONE_CONFIG_BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-backup
+                      key: BACKUP_PASSWORD_OBSCURED
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext: *hardened
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backup
+              emptyDir:
+                sizeLimit: 512Mi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

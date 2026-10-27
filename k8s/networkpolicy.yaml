@@ -1,5 +1,5 @@
-# Neo4j accepts Bolt only from the MCP server pods. Nothing else in the cluster
-# (or reaching it through Traefik) can talk to the database directly.
+# Neo4j accepts Bolt only from the MCP server pods and the backup job. Nothing else
+# in the cluster (or reaching it through Traefik) can talk to the database directly.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,6 +14,9 @@ spec:
         - podSelector:
             matchLabels:
               app: personal-kg-mcp
+        - podSelector:
+            matchLabels:
+              app: personal-kg-backup
       ports:
         - port: 7687
           protocol: TCP

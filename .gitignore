@@ -22,6 +22,7 @@ dumps/
 backups/
 *.dump
 *.backup
+*.jsonl.gz
 seed/private/
 
 # Local Neo4j volumes

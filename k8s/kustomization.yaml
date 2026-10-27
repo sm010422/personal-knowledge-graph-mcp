@@ -10,6 +10,7 @@ resources:
   - mcp-server.yaml
   - ingress.yaml
   - networkpolicy.yaml
+  - backup-cronjob.yaml
 # Not listed on purpose:
 #   secret.example.yaml   — template only; the real Secret is created with kubectl (docs/deployment.md)
 #   cloudflare-tunnel/    — alternative exposure, enabled only once a Cloudflare domain exists
