@@ -15,7 +15,7 @@
 | Neo4j | `neo4j-0`, k3s-master 고정, PVC `data-neo4j-0` 2Gi (local-path) |
 | MCP 서버 | `personal-kg-mcp`, worker 노드, 1 replica |
 | 배포된 이미지 | `k8s/kustomization.yaml`의 `newTag` (커밋 SHA) |
-| CI | test ✅ / build ❌ (Docker Hub 토큰 없음) / 태그 커밋 ⏸ |
+| CI | test ✅ / build ✅ / 태그 커밋 ✅ (2026-10-27 활성화) |
 | 토큰 위치 | 클러스터 Secret `personal-kg-secrets` + 이 Mac의 `.env.remote` 두 곳뿐 |
 | 기존 C4I 앱 | replicas 0으로 중지 중 (`244a066`), 헬스체크 워크플로 비활성 |
 | 로컬 | Colima 실행 중, 로컬 Neo4j `pkg-neo4j`(가상 데이터만) 실행 중 |
@@ -72,8 +72,8 @@
    gh secret set DOCKERHUB_TOKEN -R sm010422/personal-knowledge-graph-mcp   # 프롬프트에 토큰 붙여넣기
    gh workflow run CI -R sm010422/personal-knowledge-graph-mcp
    ```
-- [ ] 토큰 등록
-- [ ] **[Claude]** 파이프라인 전체 확인: test → build → `chore(deploy): pin image ...` 봇 커밋 → ArgoCD가 새 이미지로 롤아웃
+- [x] 토큰 등록 (2026-10-27)
+- [x] **[Claude]** 파이프라인 전체 확인 (run 40463394862, 봇 커밋 `f253cab`, 롤아웃 확인): test → build → `chore(deploy): pin image ...` 봇 커밋 → ArgoCD가 새 이미지로 롤아웃
 
 **완료 기준**: `gh run list`에서 세 job이 모두 success이고, `kubectl get deploy -n personal-kg personal-kg-mcp -o jsonpath='{..image}'`가 최신 커밋 SHA다.
 
