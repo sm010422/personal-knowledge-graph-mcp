@@ -16,7 +16,7 @@ cat <<EOF
 Neo4j password copied to the clipboard.
 
 1. Open https://browser.neo4j.io
-2. Connect URL: neo4j://localhost:${port}   user: neo4j   password: paste (⌘V)
+2. Connect URL: bolt://localhost:${port}  (not neo4j://: routing would hand back the pod address)   user: neo4j   password: paste (⌘V)
 3. Try:
      MATCH (n:Entity) WHERE n.deletedAt IS NULL
      OPTIONAL MATCH (n)-[r]-(m:Entity) WHERE r.validTo IS NULL
