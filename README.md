@@ -112,6 +112,7 @@ server/                 MCP 서버 (uv 프로젝트)
     policy.py           민감정보 저장 차단
     formatting.py       get_context → Markdown
     db.py, config.py    드라이버, 제약/인덱스, 설정
+    backup.py           pkg-mcp-backup: 그래프 전체 export/restore
   tests/unit, tests/integration
 docs/
   architecture.md  schema.md  security.md
@@ -119,10 +120,12 @@ docs/
   devlog/           진행 과정 기록
 k8s/                    클러스터 매니페스트 (ArgoCD가 sync)
   neo4j.yaml  mcp-server.yaml  ingress.yaml  networkpolicy.yaml  kustomization.yaml
+  backup-cronjob.yaml   매일 암호화 백업 → Backblaze B2
   secret.example.yaml   템플릿만 — 실제 Secret은 kubectl로 생성
   cloudflare-tunnel/    비활성, 도메인 생기면 전환
 .github/workflows/ci.yml  test → arm64 build → 태그 커밋
 scripts/seed_example.py   가상 인물 예시 데이터
+scripts/*backup*.sh       백업 Secret 생성, 로컬 rclone 설정
 docker-compose.yml        로컬 Neo4j
 ```
 
@@ -139,8 +142,7 @@ docker-compose.yml        로컬 Neo4j
 1. **Phase 1** — 로컬: docker-compose + stdio 모드 + 핵심 툴 + 통합 테스트 ✅
 2. **Phase 2** — HTTP 모드 + 토큰 인증 + k3s 배포 + 외부 노출 ✅
    - 외부 노출은 Tailscale Funnel로 했다. Cloudflare Tunnel은 준비만 해 두었다([ADR-0009](docs/adr/0009-expose-via-tailscale-funnel.md)).
-   - CI 자동 배포는 `DOCKERHUB_TOKEN` 설정 후 활성화된다.
-3. Phase 3 — Prometheus 메트릭(툴 호출 수/지연/에러), Grafana 대시보드, 백업 CronJob
+3. Phase 3 — 백업 CronJob ✅ ([ADR-0011](docs/adr/0011-logical-backup-to-b2.md)), Prometheus 메트릭(툴 호출 수/지연/에러), Grafana 대시보드
 4. Phase 4 — 대화 텍스트에서 LLM으로 엔티티/관계 자동 추출, 시간축 질의
 
 ## 개인정보

@@ -16,6 +16,7 @@
 | MCP 서버 | `personal-kg-mcp`, worker 노드, 1 replica |
 | 배포된 이미지 | `k8s/kustomization.yaml`의 `newTag` (커밋 SHA) |
 | CI | test ✅ / build ✅ / 태그 커밋 ✅ (2026-10-27 활성화) |
+| 백업 | CronJob `neo4j-backup` 매일 04:00 KST → B2 (암호화, 30일 보관) |
 | 토큰 위치 | 클러스터 Secret `personal-kg-secrets` + 이 Mac의 `.env.remote` 두 곳뿐 |
 | 기존 C4I 앱 | replicas 0으로 중지 중 (`244a066`), 헬스체크 워크플로 비활성 |
 | 로컬 | Colima 실행 중, 로컬 Neo4j `pkg-neo4j`(가상 데이터만) 실행 중 |
@@ -27,7 +28,8 @@
 모르고 지나가면 데이터 유실, 보안 사고, 장애로 이어질 수 있는 것들이다.
 
 ### 데이터
-- **백업이 없다.** 클러스터 Neo4j가 유일한 사본이다. PVC는 local-path라 k3s-master VM 디스크에만 있다. VM이나 디스크가 망가지면 복구할 방법이 없다 → 할 일 2번.
+- **백업은 하루 한 번이다.** 매일 04:00 KST에 B2로 백업한다. 마지막 백업 이후에 쓴 내용은 그 사이 장애가 나면 잃는다. 백업이 실패해도 알림은 아직 없다(`kubectl get jobs -n personal-kg`로 확인) → 할 일 7-1.
+- **`BACKUP_PASSPHRASE`를 잃으면 백업 전체를 풀 수 없다.** 클러스터 Secret과 이 Mac의 `.env.backup`에만 있다. 비밀번호 관리자에 따로 보관한다.
 - **로컬 DB와 클러스터 DB는 서로 다른 DB다.** 로컬 stdio 서버(docker compose Neo4j)에 쓴 내용은 클러스터에 없다. 반대도 마찬가지다. 실사용은 원격 하나로 통일하는 게 좋다.
 - **실제 개인 데이터는 레포에 절대 넣지 않는다.** 레포가 public이다. 시드 스크립트, 테스트, 덤프, 스크린샷 모두 해당된다. `.gitignore`가 일부 막지만, 마지막 방어선은 사람이다.
 - **soft delete는 데이터가 남는다.** "완전히 잊기"가 필요하면 `delete_entity(confirm=true, hard=true)`를 써야 한다.
@@ -78,13 +80,16 @@
 **완료 기준**: `gh run list`에서 세 job이 모두 success이고, `kubectl get deploy -n personal-kg personal-kg-mcp -o jsonpath='{..image}'`가 최신 커밋 SHA다.
 
 ### 2. Neo4j 백업 **[Claude]**
-현재 클러스터 DB가 **유일한 사본**이다. PVC는 local-path라 k3s-master 디스크에만 있다. 실제 개인 데이터를 쌓기 전에 해야 한다.
-- [ ] 백업 방식 결정 (ADR-0011): `neo4j-admin database dump`(Community는 온라인 덤프 불가 → 잠깐 정지 필요) vs Cypher로 JSON export(무중단)
-- [ ] CronJob 매니페스트 (`k8s/backup-cronjob.yaml`)
-- [ ] 저장 위치 결정 **[나]**: 다른 노드의 PVC / 홈서버 Mac / 외부 스토리지(S3 호환 등)
-- [ ] 복구 리허설: 백업 → 빈 DB에 복원 → `get_context` 결과 비교. 절차는 `docs/deployment.md`에 추가
+매일 04:00 KST, 암호화해서 Backblaze B2로 백업한다. 30일 보관(ADR-0011, `docs/deployment.md` "백업과 복구").
+- [x] 백업 방식 결정: Bolt 논리 덤프(`pkg-mcp-backup`, 무중단) → rclone crypt → B2 (ADR-0011)
+- [x] CronJob 매니페스트 (`k8s/backup-cronjob.yaml`), NetworkPolicy 허용
+- [x] 저장 위치: Backblaze B2 무료 버킷 `sm010422-personal-kg-backup` (2026-10-27)
+- [x] Secret `personal-kg-backup` 생성 (`scripts/create-backup-secret.sh`)
+- [x] 수동 백업 1회 성공, B2에는 암호문만 있음 확인, 로컬 일회용 Neo4j에 복원 성공 (2026-10-27, 당시 클러스터 DB는 0 nodes)
+- [ ] **[나]** `.env.backup`의 `BACKUP_PASSPHRASE`를 비밀번호 관리자에 보관
+- [ ] 실제 데이터를 넣은 뒤(5번) 복구 리허설 한 번 더: 개수와 `get_context` 결과 비교
 
-**완료 기준**: 복원 리허설을 한 번 성공하고 문서화한다.
+**완료 기준**: 실제 데이터로 복원 리허설을 한 번 성공한다. 지금은 빈 DB로 경로만 검증된 상태다.
 
 ---
 
