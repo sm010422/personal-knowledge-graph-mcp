@@ -14,3 +14,4 @@
 | [0008](0008-image-delivery-by-manifest-commit.md) | 이미지 배포는 CI가 매니페스트의 태그를 커밋 | Accepted |
 | [0009](0009-expose-via-tailscale-funnel.md) | 외부 노출은 Tailscale Funnel 재사용, Cloudflare Tunnel은 준비만 | Accepted |
 | [0010](0010-background-db-connect.md) | DB 연결은 시작을 막지 않고 백그라운드에서 재시도 | Accepted |
+| [0011](0011-logical-backup-to-b2.md) | 백업은 Bolt 논리 덤프 → rclone crypt → Backblaze B2 | Accepted |

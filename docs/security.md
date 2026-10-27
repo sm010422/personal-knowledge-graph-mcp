@@ -21,7 +21,8 @@
 
 ## 리포지토리
 
-- 실제 개인 데이터, DB 덤프, 시드 데이터는 커밋하지 않는다. `.gitignore`가 `data/`, `dumps/`, `backups/`, `*.dump`, `seed/private/`, `neo4j/`를 막는다.
+- 실제 개인 데이터, DB 덤프, 시드 데이터는 커밋하지 않는다. `.gitignore`가 `data/`, `dumps/`, `backups/`, `*.dump`, `*.jsonl.gz`, `seed/private/`, `neo4j/`를 막는다.
+- 클러스터 백업은 업로드 전에 rclone crypt로 암호화한다. 저장소(B2)에는 암호문만 있다(ADR-0011). 복구하려고 내려받은 평문 덤프는 작업이 끝나면 바로 지운다.
 - `scripts/seed_example.py`와 테스트 데이터는 모두 **가상 인물**(Jordan Lee, Alex, Example Corp 등)이다.
 - 시크릿은 `.env`(git 제외)나 k8s Secret에만 둔다. 커밋되는 것은 `.env.example`뿐이다.
 

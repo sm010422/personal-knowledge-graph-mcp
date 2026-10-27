@@ -66,3 +66,4 @@ flowchart LR
 - **스키마 부트스트랩**: 서버 시작 시 `CREATE ... IF NOT EXISTS`로 제약과 인덱스를 만든다. 별도 마이그레이션 도구 없이 멱등하게 동작한다.
 - **Neo4j 알림 끄기**: `deletedAt`처럼 선택적 속성을 쓰면 Neo4j가 쿼리마다 "property does not exist" 경고를 보낸다. stdio 모드에서는 이게 MCP 클라이언트 로그를 덮으므로 드라이버에서 `notifications_min_severity="OFF"`로 끈다.
 - **전문 검색 분석기 `cjk`**: 한국어를 bigram으로 쪼개서 "궤도 추적"이 "위성 궤도 추적 서비스"에 걸린다. 라틴 문자는 소문자화되며, 영문 단어에는 `kube*` 같은 접두 와일드카드를 덧붙인다.
+- **백업**: `pkg-mcp-backup`이 Bolt로 그래프 전체를 gzip JSON Lines로 덤프하고 빈 DB에 복원한다. 매일 CronJob이 암호화해서 B2에 올린다(ADR-0011).

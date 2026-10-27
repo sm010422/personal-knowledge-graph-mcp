@@ -266,6 +266,53 @@ git log --oneline -- k8s/kustomization.yaml     # 이전 배포 SHA 찾기
 
 ArgoCD Application을 지우면 `prune: true` 때문에 PVC까지 지워질 수 있다. 내리고 싶을 때는 Application을 지우지 말 것.
 
+### 백업과 복구
+
+매일 04:00 KST에 CronJob `neo4j-backup`이 그래프 전체를 덤프한다. rclone crypt로 암호화한 뒤 Backblaze B2 버킷의 `neo4j/` 아래에 올리고, 30일 넘은 백업은 지운다. 결정 근거는 [ADR-0011](adr/0011-logical-backup-to-b2.md)에 있다.
+
+**최초 설정 (1회)**
+
+1. B2에서 Private 버킷과 그 버킷 전용 앱 키(Read and Write)를 만든다.
+2. 레포 루트의 `.env.backup`(git 제외)에 `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`(keyID), `S3_SECRET_ACCESS_KEY`(applicationKey)를 적는다.
+3. `scripts/create-backup-secret.sh`를 실행한다. 처음 실행하면 `BACKUP_PASSPHRASE`를 만들어 `.env.backup`에 추가하고, Secret `personal-kg-backup`을 만든다.
+4. **`BACKUP_PASSPHRASE`를 비밀번호 관리자에 복사한다.** 이 문구가 없으면 백업을 풀 수 없다. 이 Mac과 클러스터를 동시에 잃는 경우를 대비해야 한다.
+
+**수동 실행과 확인**
+
+```bash
+kubectl create job -n personal-kg --from=cronjob/neo4j-backup neo4j-backup-manual-$(date +%s)
+kubectl logs -n personal-kg job/<위 이름> -c export   # "export ok: N nodes, M relationships"
+kubectl logs -n personal-kg job/<위 이름> -c upload
+
+source scripts/backup-rclone-env.sh
+rclone ls backup:                                       # 이름은 타임스탬프뿐
+```
+
+**복구** (빈 Neo4j에만 복원된다. 데이터가 있으면 거부한다)
+
+```bash
+source scripts/backup-rclone-env.sh
+rclone copy backup:neo4j-<ts>.jsonl.gz backups/         # 내려받으면서 복호화. backups/ 는 git 제외
+
+kubectl port-forward -n personal-kg neo4j-0 17687:7687 &
+cd server
+NEO4J_URI=bolt://localhost:17687 \
+NEO4J_PASSWORD="$(kubectl get secret personal-kg-secrets -n personal-kg -o jsonpath='{.data.NEO4J_PASSWORD}' | base64 -d)" \
+  uv run pkg-mcp-backup restore ../backups/neo4j-<ts>.jsonl.gz   # "restore ok: N nodes, M relationships"
+```
+
+복원이 끝나면 `backups/` 아래 파일을 지운다(평문 개인 데이터다).
+
+**복구 리허설**은 클러스터 대신 로컬의 일회용 Neo4j에 복원해서 확인한다.
+
+```bash
+docker run --rm -d --name pkg-restore-rehearsal -p 17687:7687 -e NEO4J_AUTH=neo4j/rehearsal-pass neo4j:5-community
+cd server && NEO4J_URI=bolt://localhost:17687 NEO4J_PASSWORD=rehearsal-pass \
+  uv run pkg-mcp-backup restore ../backups/neo4j-<ts>.jsonl.gz
+# 개수가 export 로그와 같은지, get_context 결과가 클러스터와 같은지 비교
+docker rm -f pkg-restore-rehearsal && rm ../backups/neo4j-<ts>.jsonl.gz
+```
+
 ## 장애 대응
 
 | 증상 | 확인 | 원인 / 조치 |
