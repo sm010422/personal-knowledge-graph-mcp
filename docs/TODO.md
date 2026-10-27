@@ -101,8 +101,8 @@ cd /Users/parksangmin/coding/portfolio/personal-knowledge-graph-mcp
 source .env.remote
 claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: Bearer $MCP_AUTH_TOKEN"
 ```
-- [ ] 등록 후 `/mcp`에서 연결 상태와 툴 8개가 보이는지 확인
-- [ ] 로컬 stdio 서버를 같이 등록할지 결정 **[나]**: 둘 다 등록하면 기억이 두 DB로 갈라진다. 원격 하나만 쓰는 걸 권장
+- [x] user scope로 등록, `claude mcp list` ✔ Connected, `tools/list` 8개 확인 (2026-10-27)
+- [x] 로컬 stdio 서버는 등록하지 않음. 원격 하나만 사용
 
 ### 4. 실사용하면서 툴 description 다듬기 **[나 + Claude]**
 코드보다 이게 품질을 좌우한다. 며칠 실제 대화에 써 보고 관찰한다.
