@@ -282,6 +282,18 @@ scripts/graph-browser.sh            # 이후 https://browser.neo4j.io 에서 bol
 
 여기서는 조회만 한다. Browser에서 직접 쓰면 MCP 서버의 검증(관계 규칙, 민감정보 차단)과 이력(Revision)을 건너뛴다.
 
+### 툴 호출 보기
+
+서버는 툴 호출마다 로그 한 줄을 남긴다: 툴 이름, 결과(`ok` / `tool_error` = 요청이 거부됨 / `error` = 버그·인프라), 소요 시간. 인자는 개인 데이터라 남기지 않는다. Claude가 그래프를 실제로 **읽는지**(get_context, search) 확인하는 용도다.
+
+```bash
+kubectl logs -n personal-kg deploy/personal-kg-mcp --since=24h | grep tool_call   # 최근 호출
+kubectl logs -n personal-kg deploy/personal-kg-mcp --since=168h \
+  | grep -o '{"event": "tool_call".*}' | jq -r .tool | sort | uniq -c | sort -rn     # 툴별 횟수
+```
+
+파드 로그라서 재시작하면 사라진다. 오래 보관하려면 Prometheus 메트릭(TODO 6)으로 옮긴다.
+
 ### 에러 보고 (Sentry)
 
 DSN을 Secret `personal-kg-sentry`에 넣으면 서버와 백업 Job이 예상 못 한 예외를 Sentry로 보낸다. 개인 데이터는 보내지 않는다. 켜는 법과 보내는 범위는 [observability-sentry-istio-kiali.md](observability-sentry-istio-kiali.md#sentry).

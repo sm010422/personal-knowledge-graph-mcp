@@ -24,6 +24,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from pkg_mcp.auth import SharedTokenVerifier
+from pkg_mcp.calllog import ToolCallLog, configure_logging
 from pkg_mcp.config import Settings
 from pkg_mcp.db import bootstrap_schema, create_driver
 from pkg_mcp.errors import KnowledgeGraphError
@@ -126,6 +127,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         lifespan=graph_lifespan,
         auth=auth,
     )
+    mcp.add_middleware(ToolCallLog())
 
     # Probes for Kubernetes. Custom routes sit outside the MCP endpoint, so they
     # need no token; they reveal nothing beyond up/down.
@@ -374,6 +376,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
 
 
 def main() -> None:
+    configure_logging()
     settings = Settings()  # type: ignore[call-arg]
     init_sentry(settings, component="server")
     if settings.mcp_transport == "stdio":

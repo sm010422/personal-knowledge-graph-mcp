@@ -145,8 +145,9 @@ claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: 
 - [ ] 백업 CronJob 실패도 Sentry Crons(체크인)로 감시 → 7-1 백업 실패 알림과 같이 해결
 
 ### 8. 로깅 정리 **[Claude]**
-- [ ] 현재 `logger.info("Connected to Neo4j ...")`가 기본 로깅 설정에서 안 보인다(ADR-0010 남은 점)
-- [ ] 구조화(JSON) 로그. 툴 이름, 소요 시간, 결과 상태를 남기되 **툴 인자 내용(개인 데이터)은 로그에 남기지 않는다**
+- [x] `pkg_mcp` 로거를 stderr로 연결 → `Connected to Neo4j ...`가 보인다(ADR-0010 남은 점)
+- [x] 툴 호출마다 JSON 한 줄(`tool`, `outcome`, `ms`). **인자는 남기지 않는다** (`calllog.py`, 보는 법은 deployment.md "툴 호출 보기")
+- [ ] FastMCP 자체 로거는 예상 못 한 예외의 트레이스백(메시지 포함)을 파드 로그에 찍는다. 파드 로그는 클러스터 밖으로 안 나가지만, 로그 수집을 붙이면 다시 본다
 
 ### 9. 시작 백오프 상한 조정 **[Claude]**
 - [ ] 최대 15초 → 5초. 동시 재시작 시 정상화가 39초에서 약 25초로 줄어들 것으로 예상된다. 재현 테스트로 확인
