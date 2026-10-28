@@ -17,10 +17,12 @@ Neo4j password copied to the clipboard.
 
 1. Open https://browser.neo4j.io
 2. Connect URL: bolt://localhost:${port}  (not neo4j://: routing would hand back the pod address)   user: neo4j   password: paste (⌘V)
-3. Try:
-     MATCH (n:Entity) WHERE n.deletedAt IS NULL
-     OPTIONAL MATCH (n)-[r]-(m:Entity) WHERE r.validTo IS NULL
+3. Whole graph in one view (current facts + notes, no history):
+     MATCH (n) WHERE NOT n:Revision AND n.deletedAt IS NULL
+     OPTIONAL MATCH (n)-[r]-(m) WHERE NOT m:Revision AND m.deletedAt IS NULL AND r.validTo IS NULL
      RETURN n, r, m
+   Everything, history included:  MATCH (n) OPTIONAL MATCH (n)-[r]-(m) RETURN n, r, m
+   (Clicking a label in the sidebar shows only that label's nodes, without relationships.)
 
 Read only, please: writes here bypass the MCP server's validation and history.
 Tunnel is open until Ctrl+C.
