@@ -24,5 +24,9 @@ class Settings(BaseSettings):
     mcp_auth_token: SecretStr | None = None
     mcp_auth_token_next: SecretStr | None = None
 
+    # Error reporting (pkg_mcp.observability). Unset = off.
+    sentry_dsn: SecretStr | None = None
+    sentry_environment: str = "local"
+
     def auth_tokens(self) -> list[str]:
         return [t.get_secret_value() for t in (self.mcp_auth_token, self.mcp_auth_token_next) if t]

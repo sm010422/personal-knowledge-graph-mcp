@@ -282,6 +282,14 @@ scripts/graph-browser.sh            # 이후 https://browser.neo4j.io 에서 bol
 
 여기서는 조회만 한다. Browser에서 직접 쓰면 MCP 서버의 검증(관계 규칙, 민감정보 차단)과 이력(Revision)을 건너뛴다.
 
+### 에러 보고 (Sentry)
+
+DSN을 Secret `personal-kg-sentry`에 넣으면 서버와 백업 Job이 예상 못 한 예외를 Sentry로 보낸다. 개인 데이터는 보내지 않는다. 켜는 법과 보내는 범위는 [observability-sentry-istio-kiali.md](observability-sentry-istio-kiali.md#sentry).
+
+```bash
+scripts/create-sentry-secret.sh     # .env.sentry 의 SENTRY_DSN → Secret, 서버 재시작
+```
+
 ### 백업과 복구
 
 매일 04:00 KST에 CronJob `neo4j-backup`이 그래프 전체를 덤프한다. rclone crypt로 암호화한 뒤 Backblaze B2 버킷의 `neo4j/` 아래에 올리고, 30일 넘은 백업은 지운다. 결정 근거는 [ADR-0011](adr/0011-logical-backup-to-b2.md)에 있다.

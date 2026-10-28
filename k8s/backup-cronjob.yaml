@@ -54,6 +54,14 @@ spec:
                     secretKeyRef:
                       name: personal-kg-secrets
                       key: NEO4J_PASSWORD
+                - name: SENTRY_DSN # optional: error reporting is off until the Secret exists
+                  valueFrom:
+                    secretKeyRef:
+                      name: personal-kg-sentry
+                      key: SENTRY_DSN
+                      optional: true
+                - name: SENTRY_ENVIRONMENT
+                  value: production
               resources:
                 requests:
                   cpu: 50m

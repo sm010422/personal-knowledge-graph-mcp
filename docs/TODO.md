@@ -137,11 +137,11 @@ claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: 
 - [ ] 선택지: (a) personal-kg 엔드포인트만 확인하는 새 워크플로(공개 URL에 토큰 없이 요청해서 401이면 정상) (b) Grafana alert → ntfy
 - [ ] C4I 앱 복구 여부(10번)와 함께 결정
 
-### 7-2. Sentry 에러 추적 **[나: 계정 / Claude: 구현]**
-- [ ] Sentry SaaS 무료 플랜(Developer). self-hosted는 메모리가 수 GB 필요해서 이 클러스터에 못 올린다
-- [ ] `sentry-sdk` 초기화는 `SENTRY_DSN`이 있을 때만. DSN은 Secret에 둔다
-- [ ] **개인 데이터 차단이 핵심**: `send_default_pii=False`, `include_local_variables=False`, 요청 본문 미첨부, `before_send`에서 툴 인자·예외 메시지 속 값 제거. 툴 이름과 에러 타입만 남긴다
-- [ ] 도메인 에러(엔티티 없음, 관계 규칙 위반)는 정상 흐름이라 보내지 않는다. 예상 못 한 예외만
+### 7-2. Sentry 에러 추적 **[나: 계정 / Claude: 구현 ✅]**
+- [x] `sentry-sdk` 연동. `SENTRY_DSN`이 있을 때만 켜진다. Secret `personal-kg-sentry`는 optional이라 DSN 없이 배포해도 무해하다
+- [x] 개인 데이터 차단: 예외 타입·스택 프레임만 보낸다. 메시지·지역 변수·툴 인자·헤더·로그는 안 보낸다(MCP 통합·tracing off). 테스트로 확인
+- [x] 도메인 에러(KnowledgeGraphError)는 보내지 않는다. 예상 못 한 예외만
+- [ ] **나**: sentry.io 가입 → Python 프로젝트 → `.env.sentry`에 `SENTRY_DSN=...` → `scripts/create-sentry-secret.sh` → 확인 이벤트([문서](observability-sentry-istio-kiali.md#켜는-방법))
 - [ ] 백업 CronJob 실패도 Sentry Crons(체크인)로 감시 → 7-1 백업 실패 알림과 같이 해결
 
 ### 8. 로깅 정리 **[Claude]**
@@ -191,17 +191,9 @@ gitnexus(약 1.27GB)와 Neo4j가 둘 다 k3s-master에 고정돼 있어서, `git
 
 ## 🧪 실험 (이 프로젝트 밖, 클러스터 단위)
 
-### 16. Istio 서비스 메시 **[나 + Claude]**
-personal-kg에 꼭 필요한 기능은 아니다. 서비스가 2개(MCP 서버, Neo4j)이고 Neo4j는 HTTP가 아니라 Bolt(TCP)라서 Istio의 L7 기능(재시도, 트래픽 분할, HTTP 지표)은 MCP 서버 쪽에만 의미가 있다. 배우는 목적으로는 좋다: mTLS, Kiali로 요청 흐름 시각화, 카나리 배포.
-- [ ] 메모리 확인이 먼저다. master 66%. **sidecar 모드는 파드마다 프록시가 붙어 부담이 크다 → ambient 모드(노드당 ztunnel)** 권장
-- [ ] k3s-msa-infrastructure 레포에서 클러스터 단위로 설치·관리(ArgoCD). Traefik은 그대로 입구로 두고 메시 안쪽만 Istio
-- [ ] 이 프로젝트는 namespace에 ambient 라벨만 붙이는 사용자가 된다. 적용 전후 지연과 메모리를 재서 devlog로 남긴다
-- [ ] NetworkPolicy와 Istio AuthorizationPolicy가 겹치는 부분을 정리한다
-
-## 🟣 Phase 4 (나중)
-- [ ] 대화 텍스트에서 LLM으로 엔티티·관계 자동 추출 → `provenance: inferred`, `confidence`로 적재
-- [ ] 시간축 질의 툴: "2026년 9월 기준 지원 현황"처럼 `validFrom/validTo`를 쓰는 질의(ADR-0003 구조 활용)
-- [ ] 이름 변경(rename) 툴 (ADR-0005의 남은 점)
+### 16. Istio 서비스 메시 + Kiali — **보류 (2026-10-28)**
+ambient 모드로 줄여도 예상 메모리 300~450Mi(전체 여유의 15~20%), L7까지 보려면 waypoint로 더 든다. 서비스 2개짜리 프로젝트가 얻는 것에 비해 커서 보류했다. 근거와 재도입 시 주의점(NetworkPolicy 15008·프로브 주소, ArgoCD webhook diff)은 [observability-sentry-istio-kiali.md](observability-sentry-istio-kiali.md).
+- [ ] 노드 메모리가 늘면 재검토. 그 전까지 요청 흐름 시각화는 Prometheus 메트릭 + Grafana(6번)로 대신한다
 
 ---
 

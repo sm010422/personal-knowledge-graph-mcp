@@ -28,6 +28,7 @@ from pkg_mcp.config import Settings
 from pkg_mcp.db import bootstrap_schema, create_driver
 from pkg_mcp.errors import KnowledgeGraphError
 from pkg_mcp.formatting import render_context
+from pkg_mcp.observability import init_sentry, report_unexpected
 from pkg_mcp.repository import KnowledgeGraph
 from pkg_mcp.schema import (
     DeleteResult,
@@ -158,6 +159,11 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             return await op
         except KnowledgeGraphError as exc:
             raise ToolError(str(exc)) from exc
+        except Exception as exc:
+            # A bug or an infrastructure failure, not a bad request. FastMCP still
+            # turns it into a tool error for the client.
+            report_unexpected(exc)
+            raise
 
     @mcp.tool(annotations={"idempotentHint": True})
     async def upsert_entity(
@@ -369,6 +375,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
 
 def main() -> None:
     settings = Settings()  # type: ignore[call-arg]
+    init_sentry(settings, component="server")
     if settings.mcp_transport == "stdio":
         # The client spawned us; no network listener, so no auth.
         create_server(settings).run(show_banner=False)

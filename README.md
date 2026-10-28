@@ -133,6 +133,7 @@ server/                 MCP 서버 (uv 프로젝트)
     formatting.py       get_context → Markdown
     db.py, config.py    드라이버, 제약/인덱스, 설정
     backup.py           pkg-mcp-backup: 그래프 전체 export/restore
+    observability.py    Sentry 에러 보고 (SENTRY_DSN 있을 때만, 개인 데이터 제거)
   tests/unit, tests/integration
 docs/
   architecture.md  schema.md  security.md
@@ -146,12 +147,13 @@ k8s/                    클러스터 매니페스트 (ArgoCD가 sync)
 .github/workflows/ci.yml  test → arm64 build → 태그 커밋
 scripts/seed_example.py   가상 인물 예시 데이터
 scripts/*backup*.sh       백업 Secret 생성, 로컬 rclone 설정
+scripts/create-sentry-secret.sh  Sentry DSN Secret 생성
 docker-compose.yml        로컬 Neo4j
 ```
 
 ## 문서
 
-- [아키텍처](docs/architecture.md) · [요청 흐름 다이어그램](docs/request-flow.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md)
+- [아키텍처](docs/architecture.md) · [요청 흐름 다이어그램](docs/request-flow.md) · [그래프 스키마](docs/schema.md) · [보안·개인정보 정책](docs/security.md) · [Sentry·Istio·Kiali 검토](docs/observability-sentry-istio-kiali.md)
 - [할 일 · 알아둘 점](docs/TODO.md) — 현재 상태, 주의사항, 우선순위별 할 일
 - [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
@@ -162,7 +164,7 @@ docker-compose.yml        로컬 Neo4j
 1. **Phase 1** — 로컬: docker-compose + stdio 모드 + 핵심 툴 + 통합 테스트 ✅
 2. **Phase 2** — HTTP 모드 + 토큰 인증 + k3s 배포 + 외부 노출 ✅
    - 외부 노출은 Tailscale Funnel로 했다. Cloudflare Tunnel은 준비만 해 두었다([ADR-0009](docs/adr/0009-expose-via-tailscale-funnel.md)).
-3. Phase 3 — 백업 CronJob ✅ ([ADR-0011](docs/adr/0011-logical-backup-to-b2.md)), Prometheus 메트릭(툴 호출 수/지연/에러), Grafana 대시보드
+3. Phase 3 — 백업 CronJob ✅ ([ADR-0011](docs/adr/0011-logical-backup-to-b2.md)), Sentry 에러 보고 ✅(DSN 등록 대기), Prometheus 메트릭(툴 호출 수/지연/에러), Grafana 대시보드
 4. Phase 4 — 대화 텍스트에서 LLM으로 엔티티/관계 자동 추출, 시간축 질의
 
 ## 개인정보

@@ -35,6 +35,7 @@ from neo4j.time import Date, DateTime, Duration, Time
 
 from pkg_mcp.config import Settings
 from pkg_mcp.db import SCHEMA_STATEMENTS
+from pkg_mcp.observability import init_sentry
 
 FORMAT = "pkg-mcp-backup"
 VERSION = 1
@@ -243,6 +244,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     settings = Settings()  # type: ignore[call-arg]
+    # Uncaught exceptions are reported by the SDK's excepthook; BackupError exits below
+    # and shows up as a failed Job instead.
+    init_sentry(settings, component="backup")
     driver = GraphDatabase.driver(
         settings.neo4j_uri,
         auth=(settings.neo4j_user, settings.neo4j_password.get_secret_value()),
