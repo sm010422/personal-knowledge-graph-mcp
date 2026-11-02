@@ -117,8 +117,8 @@ claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: 
 - [ ] 관찰 결과를 `docs/devlog/`에 기록하고 description과 `INSTRUCTIONS` 수정
 
 ### 4-1. 기존 `RELATED_TO` 4개 → `PART_OF` 이전 **[나]**
-`PART_OF` 추가 전에 만들어진 소속 관계 4개(엣지 속성 `kind`가 "팀 프로젝트 소속" 또는 "캡스톤디자인")를 옮긴다. 속성을 그대로 복사하고 원래 엣지를 지운다. `end_relation`은 쓰지 않는다(사실이 아닌 종료 이력이 남는다). 운영 DB 직접 쓰기라 Claude 자동 승인에서 막혀 직접 실행한다. 명령은 [devlog](devlog/2026-11-02-public-polish-and-first-graph-audit.md#기존-엣지-이전-대기-중) 참고.
-- [ ] 이전 실행, `PART_OF` 4개 / Project → Organization `RELATED_TO` 1개 남았는지 확인
+`PART_OF` 추가 전에 만들어진 소속 관계 4개(엣지 속성 `kind`가 "팀 프로젝트 소속" 또는 "캡스톤디자인")를 옮긴다. 속성을 그대로 복사하고 원래 엣지를 지운다. `end_relation`은 쓰지 않는다(사실이 아닌 종료 이력이 남는다). 운영 DB 직접 쓰기라 Claude 자동 승인에서 막혀 직접 실행한다. 명령은 [devlog](devlog/2026-11-02-public-polish-and-first-graph-audit.md#기존-엣지-이전) 참고.
+- [x] 이전 실행 (2026-11-02): `migrated 4`. `PART_OF` 4개, 속성(`validFrom`, `provenance`, `kind`) 유지, `RELATED_TO`는 2개(타깃 기업, Project → Project)만 남음
 
 ### 5. 초기 데이터 적재 **[나]**
 - [ ] 나(Person, `isSelf: true`), 진행한 프로젝트들, 주요 기술 스택, 지원 중인 회사와 일정

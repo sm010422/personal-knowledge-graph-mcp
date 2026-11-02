@@ -73,7 +73,7 @@ GitHub 트래픽(14일)도 같은 그림이었다.
 
 ADR 예시에 처음에는 실제 그래프의 이름을 적었다가, 커밋 전에 가상 이름으로 바꿨다. 운영 데이터를 보고 쓰는 문서일수록 이 실수가 쉽다.
 
-### 기존 엣지 이전 (대기 중)
+### 기존 엣지 이전
 
 이미 있는 `RELATED_TO` 4개를 `PART_OF`로 바꿔야 새 스키마와 맞는다. MCP 툴로는 하지 않는다. `end_relation`을 쓰면 "그 관계가 11-02에 끝났다"는 **사실이 아닌 이력**이 남기 때문이다. 대신 Cypher 한 트랜잭션으로 속성(`validFrom`, `provenance`, `kind`)을 그대로 복사한 `PART_OF`를 만들고 원래 엣지를 지운다.
 
@@ -90,6 +90,8 @@ RETURN count(n) AS migrated"'
 
 `migrated`가 4이면 된다. 문장 하나라서 한 트랜잭션으로 실행되고, 중간에 실패하면 아무것도 바뀌지 않는다.
 
+**결과 (같은 날 실행)**: `migrated 4`. 읽기 조회로 `PART_OF` 4개의 `validFrom`(원래 날짜), `provenance`, `kind`가 그대로인 것과, `RELATED_TO`는 이전 대상이 아닌 2개만 남은 것을 확인했다.
+
 ## 4. 세션 종료 자동 동기화 훅 (`kg-sync`)
 
 레포 밖(`~/.claude/hooks/kg-sync.sh`)에 있는 개인 설정이다. Claude Code 세션이 끝나면 headless Claude가 대화를 읽고, 오래 유지될 사실만 `provenance="inferred"`로 그래프에 넣는다.
@@ -104,7 +106,7 @@ RETURN count(n) AS migrated"'
 
 ## 5. 남은 것
 
-- [ ] 기존 `RELATED_TO` 4개 → `PART_OF` 이전 (TODO 4-1)
+- [x] 기존 `RELATED_TO` 4개 → `PART_OF` 이전 (TODO 4-1)
 - [ ] 다음 몇 세션 뒤 `~/.claude/kg-sync.log`에서 `get_context`를 실제로 쓰는지, 노트 중복이 줄었는지 확인
 - [ ] 남이 5분 안에 써 볼 수 있는 설치 경로(compose 일체형, PyPI/`uvx`, MCP Registry)와 데모
 
