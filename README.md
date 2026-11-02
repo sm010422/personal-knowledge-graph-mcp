@@ -62,73 +62,60 @@ Example `get_context` output (fictional data):
 - Event:Example Corp interview -CONCERNS-> **this** (since 2026-10-19)
 ```
 
-## Quick start
+## Quick start (5 minutes)
 
-Requirements: Docker (Colima/OrbStack/Docker Desktop), [uv](https://docs.astral.sh/uv/)
-
-```bash
-cp .env.example .env              # change NEO4J_PASSWORD
-docker compose up -d --wait       # Neo4j (browser UI: http://localhost:7474)
-uv sync --project server
-uv run --project server python scripts/seed_example.py   # optional: fictional example data
-```
-
-The server reads `.env` from its working directory. When Claude launches the server, the working directory is not the repo root, so pass the environment variables directly as shown below.
-
-### Connect Claude Code — remote server on the cluster (recommended)
-
-The token is the value saved to the local `.env.remote` (git-ignored) when the cluster Secret was created ([deployment.md](docs/deployment.md#secret-생성-최초-1회), in Korean).
+Requirements: [Docker](https://docs.docker.com/get-docker/) and [Claude Code](https://docs.claude.com/en/docs/claude-code).
 
 ```bash
-source .env.remote
-claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: Bearer $MCP_AUTH_TOKEN"
+git clone https://github.com/sm010422/personal-knowledge-graph-mcp && cd personal-knowledge-graph-mcp
+./scripts/quickstart.sh
 ```
 
-### Connect Claude Code — local stdio
+The script writes `.env` with a random Neo4j password and MCP token (never printed), builds the server image locally (amd64 or arm64), and starts Neo4j and the MCP server on `localhost`. Then connect Claude Code from the same directory:
 
 ```bash
-claude mcp add personal-kg \
-  -e NEO4J_URI=bolt://localhost:7687 -e NEO4J_USER=neo4j -e NEO4J_PASSWORD=<same value as .env> \
-  -- uv run --project /absolute/path/personal-knowledge-graph-mcp/server pkg-mcp
+claude mcp add --transport http personal-kg http://localhost:8000/mcp \
+  --header "Authorization: Bearer $(sed -n 's/^MCP_AUTH_TOKEN=//p' .env)"
 ```
 
-### Connect the Claude desktop app — remote server on the cluster (recommended)
+Start `claude` and tell it something worth remembering ("I'm learning Rust for a CLI side project"). In a new session, ask what it knows about you.
 
-The app settings have no field for HTTP headers. So [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) talks stdio to the app and relays to the remote HTTP endpoint with the token attached. Add this to `mcpServers` in `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app with ⌘Q.
+- Data lives in a Docker volume and survives restarts. `docker compose down` stops everything; `docker compose down -v` deletes the data.
+- Look at the graph in Neo4j Browser: http://localhost:7474 (user `neo4j`, password in `.env`).
+- Optional fictional example data: `uv run --project server python scripts/seed_example.py`
+
+### Connect other clients
+
+**Claude desktop app.** The app spawns servers over stdio, so run the server with [uv](https://docs.astral.sh/uv/) straight from GitHub against the Neo4j started above. Add this to `mcpServers` in `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app with ⌘Q:
 
 ```json
 "personal-kg": {
-  "command": "npx",
-  "args": ["-y", "mcp-remote", "https://k3s-master.taildcdcee.ts.net/mcp",
-           "--header", "Authorization:${AUTH_HEADER}"],
-  "env": { "AUTH_HEADER": "Bearer <MCP_AUTH_TOKEN from .env.remote>" }
-}
-```
-
-- Keep `Authorization:${AUTH_HEADER}` exactly as is, with no space. A space inside an argument makes the app split it wrongly.
-- Logs: `~/Library/Logs/Claude/mcp-server-personal-kg.log`. If you see `npm error EACCES`, `~/.npm` has root-owned files → `sudo chown -R 501:20 ~/.npm`.
-
-### Connect Claude Desktop — local stdio (for development)
-
-This connects to the local docker compose Neo4j. It is a **different DB** from the cluster one, so for real use stick to the remote server only.
-
-`~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "personal-kg": {
-      "command": "uv",
-      "args": ["run", "--project", "/absolute/path/personal-knowledge-graph-mcp/server", "pkg-mcp"],
-      "env": {
-        "NEO4J_URI": "bolt://localhost:7687",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "<same value as .env>"
-      }
-    }
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/sm010422/personal-knowledge-graph-mcp#subdirectory=server", "pkg-mcp"],
+  "env": {
+    "NEO4J_URI": "bolt://localhost:7687",
+    "NEO4J_PASSWORD": "<NEO4J_PASSWORD from .env>"
   }
 }
 ```
+
+If the app log says `uvx` was not found, apps do not see your shell `PATH`: use the full path from `which uvx` as `command`.
+
+**Claude Code over stdio** (no MCP container, only Neo4j: `docker compose up -d --wait neo4j`):
+
+```bash
+claude mcp add personal-kg \
+  -e NEO4J_URI=bolt://localhost:7687 -e NEO4J_PASSWORD=<NEO4J_PASSWORD from .env> \
+  -- uvx --from "git+https://github.com/sm010422/personal-knowledge-graph-mcp#subdirectory=server" pkg-mcp
+```
+
+The server reads `.env` only from its working directory, and a client starts it elsewhere, so stdio setups pass the variables explicitly.
+
+### Run it on a server
+
+Use the same image in HTTP mode (`MCP_TRANSPORT=http`, `NEO4J_URI`, `NEO4J_PASSWORD`, `MCP_AUTH_TOKEN`) behind HTTPS, and register it with `claude mcp add --transport http <url> --header "Authorization: Bearer <token>"`. The token check is built in, but anything that can reach the URL can try tokens, so keep it long and random.
+
+The author's setup (home k3s, ArgoCD, Tailscale Funnel, nightly encrypted backups, Claude desktop app via `mcp-remote`) is documented in [docs/deployment.md](docs/deployment.md) (in Korean).
 
 ## Development
 
@@ -168,7 +155,8 @@ k8s/                    cluster manifests (synced by ArgoCD)
 scripts/seed_example.py   fictional example data
 scripts/*backup*.sh       create backup Secret, local rclone setup
 scripts/create-sentry-secret.sh  create Sentry DSN Secret
-docker-compose.yml        local Neo4j
+docker-compose.yml        local Neo4j + MCP server (HTTP)
+scripts/quickstart.sh     generate .env and start docker compose
 ```
 
 ## Docs

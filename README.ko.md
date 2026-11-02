@@ -62,73 +62,60 @@ flowchart LR
 - Event:Example Corp interview -CONCERNS-> **this** (since 2026-10-19)
 ```
 
-## 빠른 시작
+## 빠른 시작 (5분)
 
-필요한 것: Docker(Colima/OrbStack/Docker Desktop), [uv](https://docs.astral.sh/uv/)
-
-```bash
-cp .env.example .env              # NEO4J_PASSWORD 변경
-docker compose up -d --wait       # Neo4j (브라우저 UI: http://localhost:7474)
-uv sync --project server
-uv run --project server python scripts/seed_example.py   # 선택: 가상 예시 데이터
-```
-
-서버는 실행 위치(cwd)의 `.env`를 읽는다. Claude가 서버를 띄울 때는 cwd가 저장소 루트가 아니므로, 아래처럼 환경변수를 직접 넘긴다.
-
-### Claude Code에 연결 — 클러스터의 원격 서버 (권장)
-
-토큰은 클러스터 Secret을 만들 때 로컬 `.env.remote`(git-ignored)에 저장해 둔 값이다([deployment.md](docs/deployment.md#secret-생성-최초-1회)).
+필요한 것: [Docker](https://docs.docker.com/get-docker/), [Claude Code](https://docs.claude.com/en/docs/claude-code)
 
 ```bash
-source .env.remote
-claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: Bearer $MCP_AUTH_TOKEN"
+git clone https://github.com/sm010422/personal-knowledge-graph-mcp && cd personal-knowledge-graph-mcp
+./scripts/quickstart.sh
 ```
 
-### Claude Code에 연결 — 로컬 stdio
+스크립트가 랜덤 Neo4j 비밀번호와 MCP 토큰으로 `.env`를 만들고(화면에 출력하지 않는다), 서버 이미지를 로컬에서 빌드한 뒤(amd64·arm64 모두 가능) Neo4j와 MCP 서버를 `localhost`에 띄운다. 같은 디렉터리에서 Claude Code를 연결한다.
 
 ```bash
-claude mcp add personal-kg \
-  -e NEO4J_URI=bolt://localhost:7687 -e NEO4J_USER=neo4j -e NEO4J_PASSWORD=<.env와 같은 값> \
-  -- uv run --project /절대경로/personal-knowledge-graph-mcp/server pkg-mcp
+claude mcp add --transport http personal-kg http://localhost:8000/mcp \
+  --header "Authorization: Bearer $(sed -n 's/^MCP_AUTH_TOKEN=//p' .env)"
 ```
 
-### Claude 데스크톱 앱에 연결 — 클러스터의 원격 서버 (권장)
+`claude`를 실행하고 기억할 만한 걸 말해 본다("CLI 사이드 프로젝트 때문에 Rust 공부 중이야"). 새 세션에서 나에 대해 아는 걸 물어보면 꺼내 온다.
 
-앱 설정에는 HTTP 헤더를 넣을 칸이 없다. 그래서 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote)가 stdio로 앱과 붙고, 토큰을 붙여서 원격 HTTP로 중계한다. `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 추가하고 앱을 ⌘Q로 재시작한다.
+- 데이터는 Docker 볼륨에 있어서 재시작해도 남는다. `docker compose down`은 중지, `docker compose down -v`는 데이터까지 삭제한다.
+- Neo4j Browser로 그래프 보기: http://localhost:7474 (user `neo4j`, 비밀번호는 `.env`)
+- 선택: 가상 예시 데이터 `uv run --project server python scripts/seed_example.py`
+
+### 다른 클라이언트 연결
+
+**Claude 데스크톱 앱.** 앱은 서버를 stdio로 띄운다. 그래서 [uv](https://docs.astral.sh/uv/)로 GitHub에서 바로 서버를 실행하고, 위에서 띄운 Neo4j에 붙인다. `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 추가하고 앱을 ⌘Q로 재시작한다.
 
 ```json
 "personal-kg": {
-  "command": "npx",
-  "args": ["-y", "mcp-remote", "https://k3s-master.taildcdcee.ts.net/mcp",
-           "--header", "Authorization:${AUTH_HEADER}"],
-  "env": { "AUTH_HEADER": "Bearer <.env.remote의 MCP_AUTH_TOKEN>" }
-}
-```
-
-- `Authorization:${AUTH_HEADER}`는 공백 없이 그대로 둔다. 인자에 공백이 있으면 앱이 인자를 잘못 나눈다.
-- 로그: `~/Library/Logs/Claude/mcp-server-personal-kg.log`. `npm error EACCES`가 나오면 `~/.npm`에 root 소유 파일이 있는 것이다 → `sudo chown -R 501:20 ~/.npm`.
-
-### Claude Desktop에 연결 — 로컬 stdio (개발용)
-
-로컬 docker compose Neo4j에 붙는다. 클러스터 DB와는 **다른 DB**라서 실사용에는 원격 하나만 쓴다.
-
-`~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "personal-kg": {
-      "command": "uv",
-      "args": ["run", "--project", "/절대경로/personal-knowledge-graph-mcp/server", "pkg-mcp"],
-      "env": {
-        "NEO4J_URI": "bolt://localhost:7687",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "<.env와 같은 값>"
-      }
-    }
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/sm010422/personal-knowledge-graph-mcp#subdirectory=server", "pkg-mcp"],
+  "env": {
+    "NEO4J_URI": "bolt://localhost:7687",
+    "NEO4J_PASSWORD": "<.env의 NEO4J_PASSWORD>"
   }
 }
 ```
+
+앱 로그에 `uvx`를 찾을 수 없다고 나오면, 앱이 셸의 `PATH`를 못 보는 것이다. `which uvx`로 나온 전체 경로를 `command`에 넣는다.
+
+**Claude Code를 stdio로** (MCP 컨테이너 없이 Neo4j만: `docker compose up -d --wait neo4j`):
+
+```bash
+claude mcp add personal-kg \
+  -e NEO4J_URI=bolt://localhost:7687 -e NEO4J_PASSWORD=<.env의 NEO4J_PASSWORD> \
+  -- uvx --from "git+https://github.com/sm010422/personal-knowledge-graph-mcp#subdirectory=server" pkg-mcp
+```
+
+서버는 실행 위치(cwd)의 `.env`만 읽는다. 클라이언트가 띄울 때는 cwd가 레포가 아니므로 stdio 설정에서는 환경변수를 직접 넘긴다.
+
+### 서버에 올려서 쓰기
+
+같은 이미지를 HTTP 모드(`MCP_TRANSPORT=http`, `NEO4J_URI`, `NEO4J_PASSWORD`, `MCP_AUTH_TOKEN`)로 HTTPS 뒤에 띄우고, `claude mcp add --transport http <url> --header "Authorization: Bearer <token>"`으로 등록한다. 토큰 검사는 내장돼 있지만 URL에 닿는 누구나 토큰을 시도할 수 있으니 길고 랜덤하게 만든다.
+
+이 레포 작성자의 구성(홈 k3s, ArgoCD, Tailscale Funnel, 매일 암호화 백업, `mcp-remote`로 데스크톱 앱 연결)은 [docs/deployment.md](docs/deployment.md)에 있다.
 
 ## 개발
 
@@ -168,7 +155,8 @@ k8s/                    클러스터 매니페스트 (ArgoCD가 sync)
 scripts/seed_example.py   가상 인물 예시 데이터
 scripts/*backup*.sh       백업 Secret 생성, 로컬 rclone 설정
 scripts/create-sentry-secret.sh  Sentry DSN Secret 생성
-docker-compose.yml        로컬 Neo4j
+docker-compose.yml        로컬 Neo4j + MCP 서버(HTTP)
+scripts/quickstart.sh     .env 생성 후 docker compose 실행
 ```
 
 ## 문서

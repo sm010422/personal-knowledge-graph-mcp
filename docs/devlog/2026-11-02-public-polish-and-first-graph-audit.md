@@ -108,7 +108,8 @@ RETURN count(n) AS migrated"'
 
 - [x] 기존 `RELATED_TO` 4개 → `PART_OF` 이전 (TODO 4-1)
 - [ ] 다음 몇 세션 뒤 `~/.claude/kg-sync.log`에서 `get_context`를 실제로 쓰는지, 노트 중복이 줄었는지 확인
-- [ ] 남이 5분 안에 써 볼 수 있는 설치 경로(compose 일체형, PyPI/`uvx`, MCP Registry)와 데모
+- [x] 남이 5분 안에 써 볼 수 있는 설치 경로: `scripts/quickstart.sh`(compose에 MCP 서버 포함, `.env` 자동 생성)와 GitHub에서 바로 실행하는 `uvx --from git+...` stdio 경로. 새 복사본에서 실행까지 40초, 401·툴 목록·쓰기·검색 확인
+- [ ] PyPI 등록과 MCP Registry 등록(계정 필요), 데모 GIF
 
 ## 6. 배운 점
 

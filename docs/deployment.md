@@ -201,7 +201,23 @@ claude mcp add --transport http personal-kg "$MCP_URL" \
   --header "Authorization: Bearer $MCP_AUTH_TOKEN"
 ```
 
-**claude.ai / Claude Desktop 커넥터**: 커스텀 커넥터는 OAuth 흐름을 기대해서 고정 Bearer 토큰으로는 붙지 않는다. Desktop은 로컬 stdio 모드로 연결한다(README). 원격 연결은 OAuth 도입 후 가능하다(ADR-0007).
+토큰은 Secret을 만들 때 로컬 `.env.remote`(git-ignored)에 저장해 둔 값이다.
+
+**Claude 데스크톱 앱** (`mcp-remote`로 중계): 앱 설정에는 HTTP 헤더를 넣을 칸이 없다. 그래서 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote)가 stdio로 앱과 붙고, 토큰을 붙여서 원격 HTTP로 중계한다. `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 추가하고 앱을 ⌘Q로 재시작한다.
+
+```json
+"personal-kg": {
+  "command": "npx",
+  "args": ["-y", "mcp-remote", "https://k3s-master.taildcdcee.ts.net/mcp",
+           "--header", "Authorization:${AUTH_HEADER}"],
+  "env": { "AUTH_HEADER": "Bearer <.env.remote의 MCP_AUTH_TOKEN>" }
+}
+```
+
+- `Authorization:${AUTH_HEADER}`는 공백 없이 그대로 둔다. 인자에 공백이 있으면 앱이 인자를 잘못 나눈다.
+- 로그: `~/Library/Logs/Claude/mcp-server-personal-kg.log`. `npm error EACCES`가 나오면 `~/.npm`에 root 소유 파일이 있는 것이다 → `sudo chown -R 501:20 ~/.npm`.
+
+**claude.ai 웹·모바일 커넥터**: 커스텀 커넥터는 OAuth 흐름을 기대해서 고정 Bearer 토큰으로는 붙지 않는다. OAuth 도입 후 가능하다(ADR-0007).
 
 ## 검증 (2026-10-19 실측)
 
