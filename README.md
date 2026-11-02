@@ -179,7 +179,7 @@ The documents under `docs/` are written in Korean.
 - [TODO & notes](docs/TODO.md) — current state, caveats, prioritized to-dos
 - [Deployment & operations guide](docs/deployment.md) — k3s setup, CI, token rotation, rollback, incident response
 - [ADR index](docs/adr/README.md)
-- Devlog: [Phase 1 start](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s deployment](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [Backup & first use](docs/devlog/2026-10-27-backup-and-first-use.md) · [Search AND/OR/NOT bug fix](docs/devlog/2026-11-02-lucene-operator-search-bug.md)
+- Devlog: [Phase 1 start](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s deployment](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [Backup & first use](docs/devlog/2026-10-27-backup-and-first-use.md) · [Search AND/OR/NOT bug fix](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [Public polish & first graph audit](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md)
 
 ## Roadmap
 

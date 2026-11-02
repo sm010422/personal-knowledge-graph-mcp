@@ -1,6 +1,6 @@
 # 할 일 목록
 
-기준일: 2026-10-28 (백업·클라이언트 연결 후). 이전 기준 2026-10-19. 끝난 항목은 체크하고, 관련 커밋이나 문서를 옆에 적는다.
+기준일: 2026-11-02 (첫 운영 그래프 점검 후, [devlog](devlog/2026-11-02-public-polish-and-first-graph-audit.md)). 이전 기준 2026-10-28, 2026-10-19. 끝난 항목은 체크하고, 관련 커밋이나 문서를 옆에 적는다.
 
 담당 표시: **[나]** = 직접 해야 함(계정·권한·결정 필요) · **[Claude]** = 요청하면 진행 가능
 
@@ -110,9 +110,15 @@ claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: 
 코드보다 이게 품질을 좌우한다. 며칠 실제 대화에 써 보고 관찰한다.
 - [ ] 저장해야 할 사실을 LLM이 놓치는 경우
 - [ ] 쓸데없는 걸 저장하는 경우
-- [ ] 관계 타입을 잘못 고르는 경우, 특히 `RELATED_TO` 남용
-- [ ] 중복 엔티티 생성(검색 없이 바로 upsert)
+- [x] 관계 타입을 잘못 고르는 경우, 특히 `RELATED_TO` 남용 → 6개 중 5개가 Project → Organization. `PART_OF`로 승격 (`fdef63a`, ADR-0004 갱신)
+- [x] 중복 엔티티 생성(검색 없이 바로 upsert) → 2026-11-02 점검 시 0건
+- [ ] 시간축을 안 쓴다: 끝난 관계 0개, Event 0개, 지원 기록 2개. 지원 단계·일정을 저장하도록 description 보강 검토
+- [ ] kg-sync 훅에 `get_context`·`list_entities` 허용(2026-11-02). 몇 세션 뒤 로그에서 노트 중복이 줄었는지 확인
 - [ ] 관찰 결과를 `docs/devlog/`에 기록하고 description과 `INSTRUCTIONS` 수정
+
+### 4-1. 기존 `RELATED_TO` 4개 → `PART_OF` 이전 **[나]**
+`PART_OF` 추가 전에 만들어진 소속 관계 4개(엣지 속성 `kind`가 "팀 프로젝트 소속" 또는 "캡스톤디자인")를 옮긴다. 속성을 그대로 복사하고 원래 엣지를 지운다. `end_relation`은 쓰지 않는다(사실이 아닌 종료 이력이 남는다). 운영 DB 직접 쓰기라 Claude 자동 승인에서 막혀 직접 실행한다. 명령은 [devlog](devlog/2026-11-02-public-polish-and-first-graph-audit.md#기존-엣지-이전-대기-중) 참고.
+- [ ] 이전 실행, `PART_OF` 4개 / Project → Organization `RELATED_TO` 1개 남았는지 확인
 
 ### 5. 초기 데이터 적재 **[나]**
 - [ ] 나(Person, `isSelf: true`), 진행한 프로젝트들, 주요 기술 스택, 지원 중인 회사와 일정

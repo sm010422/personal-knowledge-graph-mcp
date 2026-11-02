@@ -177,7 +177,7 @@ docker-compose.yml        로컬 Neo4j
 - [할 일 · 알아둘 점](docs/TODO.md) — 현재 상태, 주의사항, 우선순위별 할 일
 - [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
-- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [백업·첫 사용](docs/devlog/2026-10-27-backup-and-first-use.md) · [검색 AND/OR/NOT 버그 수정](docs/devlog/2026-11-02-lucene-operator-search-bug.md)
+- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [백업·첫 사용](docs/devlog/2026-10-27-backup-and-first-use.md) · [검색 AND/OR/NOT 버그 수정](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [공개 정비·첫 그래프 점검](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md)
 
 ## 로드맵
 
