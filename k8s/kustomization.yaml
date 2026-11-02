@@ -17,4 +17,4 @@ resources:
 
 images:
   - name: sm010422/personal-knowledge-graph-mcp
-    newTag: "5bffc18356a63a8d12da4fa4f9143115e9d84bac"
+    newTag: "fdef63a374478a45f06c8e5dc71c288c2ad9f149"
