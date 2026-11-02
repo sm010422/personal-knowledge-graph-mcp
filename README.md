@@ -19,6 +19,24 @@ flowchart LR
   - Public endpoint: `https://k3s-master.taildcdcee.ts.net/mcp` (token required)
   - CI: GitHub Actions → arm64 image → manifest tag commit → ArgoCD sync
 
+## How it compares
+
+| | This server | Official [`server-memory`](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) | [Graphiti](https://github.com/getzep/graphiti) (Zep) | [mem0](https://github.com/mem0ai/mem0) |
+|---|---|---|---|---|
+| Storage | Neo4j | Local JSON file | Graph DB (Neo4j and others) | Vector store, optional graph |
+| How facts get in | Claude calls explicit tools (`upsert_entity`, `add_relation`, ...) | Claude calls explicit tools | An LLM extracts them from conversation episodes | An LLM extracts them from conversations |
+| Extra LLM calls / API key on write | None | None | Yes | Yes |
+| When a fact changes | Old relation is closed (`validFrom`/`validTo`), changed properties kept as revisions | Overwritten | Time-bounded edges | Memory updated or deleted by the LLM |
+
+What this server adds on top:
+
+- **"What was true when" queries.** Relations carry validity ranges and entities keep a revision log, so "where did I work in 2025" or "when did I stop using X" can be answered, not just "what is true now".
+- **Sensitive data blocked in code.** Health, financial, credential and ID-number fields are rejected by a policy check ([security.md](docs/security.md)), not only by a prompt.
+- **Korean full-text search.** Fulltext indexes use Neo4j's CJK analyzer, alongside exact name/alias and substring matching.
+- **Self-hosted, no extra model.** Everything runs on your own Neo4j; the only LLM is the Claude you are already talking to.
+
+Pick something else if you want memories extracted automatically from every conversation without the assistant deciding what to save (Graphiti, mem0), or a zero-dependency single file (`server-memory`).
+
 ## Tools
 
 | Tool | What it does |
@@ -174,3 +192,7 @@ The documents under `docs/` are written in Korean.
 ## Privacy
 
 Real personal data, DB dumps and seed data are never committed. All examples and test data use fictional people. Health, financial, credential and ID-number information is not stored, and the code blocks it ([security.md](docs/security.md)).
+
+## License
+
+[MIT](LICENSE)

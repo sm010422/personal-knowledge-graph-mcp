@@ -5,6 +5,7 @@ description = "MCP server that gives Claude long-term memory as a Neo4j knowledg
 authors = [
     { name = "Park Sang Min", email = "sm0104224@gmail.com" }
 ]
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=4.1.1",

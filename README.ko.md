@@ -19,6 +19,24 @@ flowchart LR
   - 공개 엔드포인트: `https://k3s-master.taildcdcee.ts.net/mcp` (토큰 필수)
   - CI: GitHub Actions → arm64 이미지 → 매니페스트 태그 커밋 → ArgoCD sync
 
+## 다른 도구와 비교
+
+| | 이 서버 | 공식 [`server-memory`](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) | [Graphiti](https://github.com/getzep/graphiti) (Zep) | [mem0](https://github.com/mem0ai/mem0) |
+|---|---|---|---|---|
+| 저장소 | Neo4j | 로컬 JSON 파일 | 그래프 DB (Neo4j 등) | 벡터 스토어, 그래프는 선택 |
+| 사실이 들어가는 방식 | Claude가 명시적인 툴(`upsert_entity`, `add_relation` 등)을 호출 | Claude가 명시적인 툴을 호출 | LLM이 대화(episode)에서 추출 | LLM이 대화에서 추출 |
+| 쓰기 시 추가 LLM 호출 / API 키 | 없음 | 없음 | 있음 | 있음 |
+| 사실이 바뀌면 | 이전 관계를 닫고(`validFrom`/`validTo`), 바뀐 속성은 이력으로 남김 | 덮어씀 | 유효 기간이 있는 엣지 | LLM이 메모리를 수정하거나 삭제 |
+
+이 서버만의 특징:
+
+- **"그때는 무엇이 사실이었나"를 물을 수 있다.** 관계에 유효 기간이 있고 엔티티는 변경 이력을 남긴다. 그래서 "지금 무엇이 사실인가"뿐 아니라 "2025년에 어디서 일했나", "X를 언제 그만 썼나"에도 답할 수 있다.
+- **민감정보를 코드로 막는다.** 건강, 재정, 인증 정보, 식별번호 필드는 프롬프트가 아니라 정책 검사에서 거부된다([security.md](docs/security.md)).
+- **한국어 전문 검색.** 전문 인덱스는 Neo4j의 CJK analyzer를 쓰고, 이름·alias 정확 일치와 부분 일치도 함께 본다.
+- **셀프 호스팅, 추가 모델 없음.** 모든 데이터는 내 Neo4j에 있고, LLM은 이미 대화 중인 Claude 하나뿐이다.
+
+어시스턴트가 무엇을 저장할지 고르지 않고 모든 대화에서 자동으로 기억을 추출하고 싶다면 Graphiti나 mem0가, 의존성 없는 파일 하나면 충분하다면 `server-memory`가 더 맞다.
+
 ## 툴
 
 | 툴 | 하는 일 |
@@ -172,3 +190,7 @@ docker-compose.yml        로컬 Neo4j
 ## 개인정보
 
 실제 개인 데이터, DB 덤프, 시드 데이터는 커밋하지 않는다. 예시와 테스트 데이터는 모두 가상 인물이다. 건강, 재정, 인증 정보, 식별번호는 저장하지 않으며 코드로도 차단한다([security.md](docs/security.md)).
+
+## 라이선스
+
+[MIT](LICENSE)
