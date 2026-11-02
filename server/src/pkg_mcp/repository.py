@@ -59,6 +59,8 @@ INTERNAL_RELATION_KEYS = frozenset(
 )
 _PROPERTY_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 _LUCENE_SPECIAL = re.compile(r'([+\-!(){}\[\]^"~*?:\\/]|&&|\|\|)')
+# Lucene reads these as operators only in upper case; the analyzer lowercases anyway.
+_LUCENE_OPERATORS = {"AND", "OR", "NOT"}
 
 MAX_CONTEXT_RELATIONS = 200
 MAX_CONTEXT_NOTES = 20
@@ -103,6 +105,8 @@ def build_fulltext_query(text: str) -> str:
     clauses: list[str] = []
     for term in text.split():
         escaped = _LUCENE_SPECIAL.sub(r"\\\1", term)
+        if escaped in _LUCENE_OPERATORS:
+            escaped = escaped.lower()
         clauses.append(escaped)
         if term.isascii() and term.isalnum():
             clauses.append(f"{term.lower()}*")

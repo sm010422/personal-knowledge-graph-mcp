@@ -96,3 +96,5 @@ async def test_search_exact_partial_korean_and_notes(
 async def test_search_survives_lucene_syntax(graph: KnowledgeGraph, driver: AsyncDriver) -> None:
     await wait_for_fulltext(driver)
     assert isinstance(await graph.search('C++ "unbalanced (query'), list)
+    for query in ("cats AND dogs", "NOT sure", "this OR that", "AND"):
+        assert isinstance(await graph.search(query), list)

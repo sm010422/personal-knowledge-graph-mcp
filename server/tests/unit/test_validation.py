@@ -47,3 +47,4 @@ def test_fulltext_query_escapes_and_prefixes() -> None:
     assert build_fulltext_query("kube") == "kube OR kube*"
     assert build_fulltext_query("c++") == r"c\+\+"
     assert build_fulltext_query("쿠버네티스") == "쿠버네티스"
+    assert build_fulltext_query("cats AND dogs") == "cats OR cats* OR and OR and* OR dogs OR dogs*"
