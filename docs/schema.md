@@ -28,6 +28,8 @@
 ### 보조 노드
 
 - `(:Note {id, content, source, provenance, createdAt})-[:ABOUT]->(:Entity)` — 자유 텍스트 관찰. 최소 1개 엔티티에 연결해야 한다.
+  - **원문 보존**: 사용자가 완성된 문서(자기소개서, 이력서 등)를 주거나 "그대로 남겨 달라"고 하면, 전문을 고치지 않고 노트 하나에 넣는다. `source`는 `original: <제목>`이다. 가장 구체적인 엔티티(예: 그 자소서를 낸 회사)에 붙이고, 본인 Person 노드에는 붙이지 않는다. 본인 노드에 붙이면 본인에 대한 `get_context`마다 전문이 딸려 나온다. 문서 속 사실(지원 회사·직무, 프로젝트, 기술)은 별도로 엔티티·관계로 뽑는다.
+  - 저장 시 앞뒤 공백만 잘린다. 본문의 줄바꿈·들여쓰기는 그대로다. `get_context`는 노트를 전문으로(엔티티당 최신 20개), `search`는 200자 미리보기로 돌려준다.
 - `(:Revision {changedAt, changes, provenance})-[:REVISION_OF]->(:Entity)` — 속성 변경 이력. `changes`는 `{"status": {"before": "planning", "after": "active"}}` 형태의 JSON 문자열이다(Neo4j는 map을 속성으로 저장할 수 없다).
 
 ## 관계

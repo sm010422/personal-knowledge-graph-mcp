@@ -61,6 +61,10 @@ Long-term memory about the user, stored as a knowledge graph.
 - Never store health, financial, credential or ID-number information.
 - Set provenance="inferred" when you are recording something the user implied
   rather than said.
+- When the user hands over a finished document (cover letter, resume, essay) or asks
+  to keep text as written, store it verbatim in one add_note and never paraphrase it.
+  Then extract entities and relations from it separately. Facts mentioned in passing
+  in conversation may still be condensed.
 """
 
 EntityName = Annotated[
@@ -272,13 +276,26 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     @mcp.tool
     async def add_note(
         ctx: Context,
-        content: Annotated[str, Field(description="One self-contained observation.")],
+        content: Annotated[
+            str,
+            Field(
+                description="One self-contained observation, or a whole document copied "
+                "verbatim when the user asks to keep the original (see the docstring)."
+            ),
+        ],
         about_entities: Annotated[
             list[str],
-            Field(description="Names of existing entities this note is about (at least one)."),
+            Field(
+                description="Names of existing entities this note is about (at least one). "
+                "Prefer the most specific one, e.g. the company a cover letter was written for."
+            ),
         ],
         source: Annotated[
-            str, Field(description="Where this came from, e.g. 'claude-code session'.")
+            str,
+            Field(
+                description="Where this came from, e.g. 'claude-code session', or "
+                "'original: <document title>' for a verbatim document."
+            ),
         ] = "conversation",
         provenance: ProvenanceArg = "user",
     ) -> NoteRef:
@@ -287,6 +304,13 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         Good for reasons, preferences, lessons learned, or context around a decision.
         If the fact has a clear shape (a status, a date, a link between two things),
         use upsert_entity or add_relation instead so it can be queried.
+
+        Verbatim originals: when the user provides a finished document or asks to keep
+        text as written, put the full text in content unchanged (no summary, no fixes),
+        set source to "original: <title>", and attach it to the most specific entity,
+        not the user's own Person node, so it does not flood every get_context about
+        them. Record the structured facts in it with separate upsert_entity /
+        add_relation calls. get_context returns notes in full; search shows 200 chars.
         """
         return await call((await graph(ctx)).add_note(content, about_entities, source, provenance))
 

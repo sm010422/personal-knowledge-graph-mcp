@@ -98,3 +98,15 @@ async def test_search_survives_lucene_syntax(graph: KnowledgeGraph, driver: Asyn
     assert isinstance(await graph.search('C++ "unbalanced (query'), list)
     for query in ("cats AND dogs", "NOT sure", "this OR that", "AND"):
         assert isinstance(await graph.search(query), list)
+
+
+async def test_long_verbatim_note_comes_back_unchanged(graph: KnowledgeGraph) -> None:
+    paragraph = "지원 동기: 위성 데이터를 다루며 배운 점을 적습니다.\n  - 들여쓰기와 *기호*도."
+    original = "\n\n".join([paragraph] * 60)  # ~3,000 chars, like a full cover letter
+    # Only surrounding whitespace is trimmed; the body is stored as given.
+    await graph.add_note(f"\n{original}\n\n", ["Orbit"], source="original: cover letter")
+
+    ctx = await graph.get_context("Orbit")
+    notes = [n for n in ctx.notes if n.source == "original: cover letter"]
+    assert [n.content for n in notes] == [original]
+    assert original in render_context(ctx)
