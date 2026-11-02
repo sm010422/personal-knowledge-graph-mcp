@@ -36,6 +36,7 @@ class RelationType(StrEnum):
     ATTENDED = "ATTENDED"
     CONCERNS = "CONCERNS"
     COLLABORATED_WITH = "COLLABORATED_WITH"
+    PART_OF = "PART_OF"
     RELATED_TO = "RELATED_TO"
 
 
@@ -58,6 +59,7 @@ RELATION_RULES: dict[RelationType, tuple[frozenset[EntityType], frozenset[Entity
         frozenset({_E.PROJECT, _E.ORGANIZATION, _E.DECISION}),
     ),
     RelationType.COLLABORATED_WITH: (frozenset({_E.PERSON}), frozenset({_E.PERSON})),
+    RelationType.PART_OF: (frozenset({_E.PROJECT}), frozenset({_E.ORGANIZATION})),
     RelationType.RELATED_TO: (_ANY, _ANY),
 }
 

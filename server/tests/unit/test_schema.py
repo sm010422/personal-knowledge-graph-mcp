@@ -54,3 +54,9 @@ def test_related_to_accepts_anything() -> None:
     for a in EntityType:
         for b in EntityType:
             assert check_relation_rule(RelationType.RELATED_TO, a, b) is None
+
+
+def test_part_of_links_project_to_organization() -> None:
+    project, person, org = EntityType.PROJECT, EntityType.PERSON, EntityType.ORGANIZATION
+    assert check_relation_rule(RelationType.PART_OF, project, org) is None
+    assert check_relation_rule(RelationType.PART_OF, person, org) is not None

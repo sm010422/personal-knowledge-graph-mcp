@@ -211,7 +211,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
                 "KNOWS Person->Technology, HAS_DECISION Project->Decision, "
                 "APPLIED_TO/WORKED_AT/STUDIED_AT/MEMBER_OF Person->Organization, "
                 "ATTENDED Person->Event, CONCERNS Event->Project|Organization|Decision, "
-                "COLLABORATED_WITH Person->Person, RELATED_TO any->any (last resort)."
+                "COLLABORATED_WITH Person->Person, "
+                "PART_OF Project->Organization (club, bootcamp, course, company), "
+                "RELATED_TO any->any (last resort)."
             ),
         ],
         to_entity: EntityName,

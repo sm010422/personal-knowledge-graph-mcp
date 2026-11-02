@@ -47,6 +47,7 @@
 | `ATTENDED` | Person → Event | |
 | `CONCERNS` | Event → Project / Organization / Decision | |
 | `COLLABORATED_WITH` | Person → Person | |
+| `PART_OF` | Project → Organization | `kind` (동아리·부트캠프·캡스톤 등) |
 | `RELATED_TO` | 아무거나 → 아무거나 | 다른 타입이 맞지 않을 때만 |
 
 ### 관계 공통 속성
