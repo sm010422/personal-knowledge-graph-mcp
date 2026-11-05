@@ -1,6 +1,7 @@
 import pytest
 
 from pkg_mcp.schema import (
+    RELATION_RULES,
     EntityType,
     RelationType,
     check_relation_rule,
@@ -16,7 +17,7 @@ from pkg_mcp.schema import (
         ("Neo4j", "neo4j"),
         ("  Spring   Boot ", "spring boot"),
         ("ＫＡＦＫＡ", "kafka"),  # full-width -> NFKC
-        ("코오롱 베니트", "코오롱 베니트"),
+        ("한빛  소프트", "한빛 소프트"),
     ],
 )
 def test_normalize_name(raw: str, expected: str) -> None:
@@ -60,3 +61,27 @@ def test_part_of_links_project_to_organization() -> None:
     project, person, org = EntityType.PROJECT, EntityType.PERSON, EntityType.ORGANIZATION
     assert check_relation_rule(RelationType.PART_OF, project, org) is None
     assert check_relation_rule(RelationType.PART_OF, person, org) is not None
+
+
+def test_every_relation_type_has_a_rule() -> None:
+    assert set(RELATION_RULES) == set(RelationType)
+
+
+@pytest.mark.parametrize(
+    ("relation", "from_type", "to_type"),
+    [
+        (RelationType.PREREQUISITE_OF, EntityType.CONCEPT, EntityType.CONCEPT),
+        (RelationType.COVERS, EntityType.RESOURCE, EntityType.CONCEPT),
+        (RelationType.READ, EntityType.PERSON, EntityType.RESOURCE),
+        (RelationType.CITES, EntityType.DECISION, EntityType.RESOURCE),
+        (RelationType.KNOWS, EntityType.PERSON, EntityType.CONCEPT),
+        (RelationType.PURSUES, EntityType.PERSON, EntityType.GOAL),
+        (RelationType.SUPPORTS, EntityType.PROJECT, EntityType.GOAL),
+        (RelationType.LOCATED_AT, EntityType.EVENT, EntityType.PLACE),
+    ],
+)
+def test_general_purpose_relations(
+    relation: RelationType, from_type: EntityType, to_type: EntityType
+) -> None:
+    assert check_relation_rule(relation, from_type, to_type) is None
+    assert check_relation_rule(relation, to_type, from_type) is not None or from_type == to_type

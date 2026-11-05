@@ -6,12 +6,18 @@
 
 | 타입 | 용도 | 자주 쓰는 속성 |
 |---|---|---|
-| `Person` | 나 자신, 협업자 | `isSelf`, `role` |
+| `Person` | 사용자 본인(`isSelf: true`, 하나만), 다른 사람 | `isSelf`, `role` |
 | `Project` | 프로젝트 | `status`, `summary`, `startedAt`, `repoUrl`, `latestRelease` |
-| `Technology` | 기술·스킬 (초안의 Skill과 통합) | `category` |
-| `Decision` | 설계/커리어 결정 | `rationale`, `alternatives`, `decidedAt` |
-| `Event` | 면접·지원·마감·릴리즈 | `date`(`YYYY-MM-DD`로 시작, 검증함), `kind` |
+| `Technology` | 도구·언어·프레임워크 | `category` |
+| `Decision` | 결정과 그 이유 | `rationale`, `alternatives`, `decidedAt` |
+| `Event` | 날짜가 있는 일: 마감·약속·시험·면접 | `date`(`YYYY-MM-DD`로 시작, 검증함), `kind` |
 | `Organization` | 회사·학교·동아리 | `kind`, `techStack` |
+| `Concept` | 공부하는 개념·이론 (예: 고유값 분해) | `field`, `summary` |
+| `Resource` | 책·논문·강의·글 | `kind`, `url`, `author`, `status` |
+| `Place` | 장소 | `kind`, `city` |
+| `Goal` | 목표 | `status`, `targetDate`, `summary` |
+
+`Concept`·`Resource`·`Place`·`Goal`은 커리어 밖의 용도(공부, 독서, 연구, 생활)를 위해 2026-11-05에 추가했다([ADR-0012](adr/0012-general-purpose-types.md)).
 
 작성 규칙 (툴 description에도 들어 있다):
 
@@ -50,7 +56,7 @@
 |---|---|---|
 | `BUILT` | Person → Project | `role` |
 | `USES` | Project → Technology | |
-| `KNOWS` | Person → Technology | `level` |
+| `KNOWS` | Person → Technology / Concept | `level` |
 | `HAS_DECISION` | Project → Decision | |
 | `APPLIED_TO` | Person → Organization | `status`, `position` |
 | `WORKED_AT` | Person → Organization | `title` |
@@ -60,6 +66,13 @@
 | `CONCERNS` | Event → Project / Organization / Decision | |
 | `COLLABORATED_WITH` | Person → Person | |
 | `PART_OF` | Project → Organization | `kind` (동아리·부트캠프·캡스톤 등) |
+| `PREREQUISITE_OF` | Concept / Technology → Concept / Technology | A를 알아야 B를 이해할 수 있음 |
+| `COVERS` | Resource → Concept / Technology | `chapter` |
+| `READ` | Person → Resource | `status` (reading, finished) |
+| `CITES` | Decision / Project / Resource → Resource | 근거로 삼은 자료 |
+| `PURSUES` | Person → Goal | |
+| `SUPPORTS` | Project / Resource / Concept / Technology / Event / Decision → Goal | 목표에 기여 |
+| `LOCATED_AT` | Event / Organization / Person → Place | |
 | `RELATED_TO` | 아무거나 → 아무거나 | 다른 타입이 맞지 않을 때만 |
 
 ### 관계 공통 속성

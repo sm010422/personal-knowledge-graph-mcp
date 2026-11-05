@@ -66,20 +66,23 @@ Long-term memory about the user, stored as a knowledge graph.
 - Never store health, financial, credential or ID-number information.
 - Set provenance="inferred" when you are recording something the user implied
   rather than said.
-- When the user hands over a finished document (cover letter, resume, essay) that
+- The user is the Person with isSelf=true. Create it once and reuse it.
+- When the user hands over a finished document (essay, report, cover letter) that
   lives nowhere else, or asks to keep text as written, store it verbatim in one
   add_note and never paraphrase it. Then extract entities and relations from it
   separately. Facts mentioned in passing in conversation may still be condensed.
 - A document that already has a home (a file in a repo, a Notion page, a URL) is not
   copied: extract its facts as entities and relations, add a short summary note, and
   put the path or URL in source so the original can be read when needed.
-- Deadlines, interviews, tests and announcements are Events: upsert_entity type=Event
-  with date 'YYYY-MM-DD' and kind, then CONCERNS -> the organization or project.
+- Deadlines, appointments, exams and other dated things are Events: upsert_entity
+  type=Event with date 'YYYY-MM-DD' and kind, then CONCERNS -> what it is about.
   Do not leave dates only inside a relation property; upcoming_events cannot see them.
 - Keep summary to what does not change. Versions, counts and status go in their own
   properties (latestRelease, status), so one update cannot leave the other stale.
-- Technology entities are what the user and their projects use (KNOWS, USES). A
-  company's stack is a list property on the Organization (techStack), not links.
+- Technology and Concept entities are what the user knows or uses (KNOWS, USES). An
+  organization's stack is a list property on it (techStack), not links.
+- Pick the specific type and relation: a book or paper is a Resource, an idea being
+  studied is a Concept. RELATED_TO is a last resort; it cannot be queried by meaning.
 - If two entities turn out to be the same thing, merge_entities instead of keeping both.
 """
 
@@ -192,7 +195,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     async def upsert_entity(
         ctx: Context,
         type: Annotated[EntityType, Field(description="Kind of thing being recorded.")],
-        name: Annotated[str, Field(description="Canonical name, e.g. 'Neo4j', '코오롱베니트'.")],
+        name: Annotated[
+            str, Field(description="Canonical name, e.g. 'Neo4j', '고유값 분해', 'Acme Corp'.")
+        ],
         properties: Annotated[
             dict[str, Any],
             Field(
@@ -200,8 +205,11 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
                 "strings, numbers, booleans or flat lists. Set a value to null to remove it. "
                 "Common keys: Project{status, summary, startedAt, repoUrl, latestRelease}, "
                 "Technology{category}, Decision{rationale, alternatives, decidedAt}, "
-                "Event{date: 'YYYY-MM-DD', kind: deadline|interview|test|announcement}, "
-                "Organization{kind, techStack}. summary is a stable description; put "
+                "Event{date: 'YYYY-MM-DD', kind: deadline|appointment|exam|interview}, "
+                "Organization{kind, techStack}, Concept{field, summary}, "
+                "Resource{kind: book|paper|course|article, url, author, status}, "
+                "Place{kind, city}, Goal{status, targetDate, summary}. "
+                "summary is a stable description; put "
                 "numbers that change (versions, counts) in their own keys."
             ),
         ] = {},
@@ -213,8 +221,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     ) -> UpsertResult:
         """Create an entity, or update it if one with this name or alias already exists.
 
-        Use when the user mentions a durable fact: a project, a technology they use,
-        a decision and its reasoning, a company they applied to, an upcoming event.
+        Use when the user mentions a durable fact: a project, a technology or concept
+        they learned, a decision and its reasoning, a book or paper, an organization
+        they belong to, a goal, an upcoming event.
         Call search first if the name might already exist under another spelling.
         Changed values are kept in history; nothing is silently overwritten.
         Upserting a soft-deleted name restores it. Do not use for one-off chat details.
@@ -231,11 +240,16 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             RelationType,
             Field(
                 description="BUILT Person->Project, USES Project->Technology, "
-                "KNOWS Person->Technology, HAS_DECISION Project->Decision, "
+                "KNOWS Person->Technology|Concept, HAS_DECISION Project->Decision, "
                 "APPLIED_TO/WORKED_AT/STUDIED_AT/MEMBER_OF Person->Organization, "
                 "ATTENDED Person->Event, CONCERNS Event->Project|Organization|Decision, "
                 "COLLABORATED_WITH Person->Person, "
-                "PART_OF Project->Organization (club, bootcamp, course, company), "
+                "PART_OF Project->Organization (club, course, company), "
+                "PREREQUISITE_OF Concept|Technology->Concept|Technology (A must come "
+                "before B), COVERS Resource->Concept|Technology, READ Person->Resource, "
+                "CITES Decision|Project|Resource->Resource (evidence), "
+                "PURSUES Person->Goal, SUPPORTS Project|Resource|Concept|Technology|"
+                "Event|Decision->Goal, LOCATED_AT Event|Organization|Person->Place, "
                 "RELATED_TO any->any (last resort; not for a company's tech stack, "
                 "which is the Organization property techStack)."
             ),
@@ -243,7 +257,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         to_entity: EntityName,
         properties: Annotated[
             dict[str, Any],
-            Field(description="Edge attributes, e.g. {role: 'owner'} or {status: 'interview'}."),
+            Field(description="Edge attributes, e.g. {role: 'owner'} or {status: 'finished'}."),
         ] = {},
         valid_from: Annotated[
             date | None, Field(description="When this became true (YYYY-MM-DD). Default today.")
@@ -256,9 +270,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         """Link two existing entities.
 
         Both entities must exist (upsert_entity first). If the same relation already
-        holds with different properties — e.g. an application moving from
-        status 'document' to 'interview' — the old one is closed and a new one opened,
-        so the history is preserved. Same properties again is a no-op.
+        holds with different properties — e.g. a book moving from status 'reading' to
+        'finished', or an application from 'applied' to 'interview' — the old one is
+        closed and a new one opened, so the history is preserved. Same properties again is a no-op.
         """
         return await call(
             (await graph(ctx)).add_relation(
@@ -282,7 +296,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             date | None, Field(description="When it stopped being true. Default today.")
         ] = None,
     ) -> RelationResult:
-        """Mark a relation as no longer true (left a company, stopped using a technology).
+        """Mark a relation as no longer true (left an organization, stopped using a tool).
 
         The relation stays in history and is hidden from get_context by default.
         Prefer this over delete_entity when something merely ended.
@@ -307,7 +321,8 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             list[str],
             Field(
                 description="Names of existing entities this note is about (at least one). "
-                "Prefer the most specific one, e.g. the company a cover letter was written for."
+                "Prefer the most specific one, e.g. the organization a cover letter was "
+                "written for, or the Resource a reading note is about."
             ),
         ],
         source: Annotated[
@@ -365,11 +380,11 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     ) -> str:
         """Everything known about one entity, as Markdown: properties, relations, notes.
 
-        Use before answering a question about a specific project, company, technology
-        or decision. Use depth=2 for broader questions like "what is my stack across
-        projects". If you do not know the exact name, call search first.
+        Use before answering a question about a specific project, organization,
+        concept, resource or decision. Use depth=2 for broader questions like "what
+        is my stack across projects". If you do not know the exact name, call search first.
         Long notes are cut to a preview with their id; call get_note(id) when you
-        need the full text, e.g. to quote or edit a stored cover letter.
+        need the full text, e.g. to quote or edit a stored document.
         """
         g = await graph(ctx)
         result = await call(
@@ -385,7 +400,7 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         """The full text of one note, with the entities it is about.
 
         get_context shows long notes as a 300-char preview and search as 200 chars.
-        Call this when you need the whole thing, e.g. a stored cover letter.
+        Call this when you need the whole thing, e.g. a stored document.
         """
         return await call((await graph(ctx)).get_note(note_id))
 
@@ -438,8 +453,8 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
     ) -> list[EntityRef]:
         """List entities of a type, most recently updated first.
 
-        Use for enumerations: "what projects am I running", "which companies did I
-        apply to". For a single entity's details use get_context instead.
+        Use for enumerations: "what projects am I running", "which books did I read",
+        "which companies did I apply to". For one entity's details use get_context.
         To find records that may have gone stale, combine filters={status: 'active'}
         with not_updated_for_days=30 and ask the user whether they are still current.
         """

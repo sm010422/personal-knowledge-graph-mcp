@@ -22,6 +22,11 @@ class EntityType(StrEnum):
     DECISION = "Decision"
     EVENT = "Event"
     ORGANIZATION = "Organization"
+    # General-purpose types (ADR-0012): study, reading, research, personal life.
+    CONCEPT = "Concept"
+    RESOURCE = "Resource"
+    PLACE = "Place"
+    GOAL = "Goal"
 
 
 class RelationType(StrEnum):
@@ -37,6 +42,13 @@ class RelationType(StrEnum):
     CONCERNS = "CONCERNS"
     COLLABORATED_WITH = "COLLABORATED_WITH"
     PART_OF = "PART_OF"
+    PREREQUISITE_OF = "PREREQUISITE_OF"
+    COVERS = "COVERS"
+    READ = "READ"
+    CITES = "CITES"
+    PURSUES = "PURSUES"
+    SUPPORTS = "SUPPORTS"
+    LOCATED_AT = "LOCATED_AT"
     RELATED_TO = "RELATED_TO"
 
 
@@ -47,7 +59,7 @@ _ANY = frozenset(EntityType)
 RELATION_RULES: dict[RelationType, tuple[frozenset[EntityType], frozenset[EntityType]]] = {
     RelationType.BUILT: (frozenset({_E.PERSON}), frozenset({_E.PROJECT})),
     RelationType.USES: (frozenset({_E.PROJECT}), frozenset({_E.TECHNOLOGY})),
-    RelationType.KNOWS: (frozenset({_E.PERSON}), frozenset({_E.TECHNOLOGY})),
+    RelationType.KNOWS: (frozenset({_E.PERSON}), frozenset({_E.TECHNOLOGY, _E.CONCEPT})),
     RelationType.HAS_DECISION: (frozenset({_E.PROJECT}), frozenset({_E.DECISION})),
     RelationType.APPLIED_TO: (frozenset({_E.PERSON}), frozenset({_E.ORGANIZATION})),
     RelationType.WORKED_AT: (frozenset({_E.PERSON}), frozenset({_E.ORGANIZATION})),
@@ -60,6 +72,25 @@ RELATION_RULES: dict[RelationType, tuple[frozenset[EntityType], frozenset[Entity
     ),
     RelationType.COLLABORATED_WITH: (frozenset({_E.PERSON}), frozenset({_E.PERSON})),
     RelationType.PART_OF: (frozenset({_E.PROJECT}), frozenset({_E.ORGANIZATION})),
+    RelationType.PREREQUISITE_OF: (
+        frozenset({_E.CONCEPT, _E.TECHNOLOGY}),
+        frozenset({_E.CONCEPT, _E.TECHNOLOGY}),
+    ),
+    RelationType.COVERS: (frozenset({_E.RESOURCE}), frozenset({_E.CONCEPT, _E.TECHNOLOGY})),
+    RelationType.READ: (frozenset({_E.PERSON}), frozenset({_E.RESOURCE})),
+    RelationType.CITES: (
+        frozenset({_E.DECISION, _E.PROJECT, _E.RESOURCE}),
+        frozenset({_E.RESOURCE}),
+    ),
+    RelationType.PURSUES: (frozenset({_E.PERSON}), frozenset({_E.GOAL})),
+    RelationType.SUPPORTS: (
+        frozenset({_E.PROJECT, _E.RESOURCE, _E.CONCEPT, _E.TECHNOLOGY, _E.EVENT, _E.DECISION}),
+        frozenset({_E.GOAL}),
+    ),
+    RelationType.LOCATED_AT: (
+        frozenset({_E.EVENT, _E.ORGANIZATION, _E.PERSON}),
+        frozenset({_E.PLACE}),
+    ),
     RelationType.RELATED_TO: (_ANY, _ANY),
 }
 

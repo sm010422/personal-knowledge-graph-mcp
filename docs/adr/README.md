@@ -15,3 +15,4 @@
 | [0009](0009-expose-via-tailscale-funnel.md) | 외부 노출은 Tailscale Funnel 재사용, Cloudflare Tunnel은 준비만 | Accepted |
 | [0010](0010-background-db-connect.md) | DB 연결은 시작을 막지 않고 백그라운드에서 재시도 | Accepted |
 | [0011](0011-logical-backup-to-b2.md) | 백업은 Bolt 논리 덤프 → rclone crypt → Backblaze B2 | Accepted |
+| [0012](0012-general-purpose-types.md) | 커리어 밖 용도를 위한 범용 타입 4개와 관계 7개 추가 | Accepted |
