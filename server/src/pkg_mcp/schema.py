@@ -115,6 +115,10 @@ class EntityRef(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     deleted_at: str | None = None
+    last_activity_at: str | None = Field(
+        default=None,
+        description="Latest property change, note or relation; only set for stale queries",
+    )
 
 
 class UpsertResult(BaseModel):
@@ -164,3 +168,39 @@ class DeleteResult(BaseModel):
     relation_count: int
     note_count: int
     message: str
+
+
+class NoteDeleteResult(BaseModel):
+    status: Literal["needs_confirmation", "deleted"]
+    note: NoteRef
+    message: str
+
+
+class UpcomingEvent(BaseModel):
+    name: str
+    date: str = Field(description="YYYY-MM-DD, optionally followed by a time")
+    properties: dict[str, object] = Field(default_factory=dict)
+    concerns: list[str] = Field(default_factory=list, description="Type:name it is about")
+
+
+class MergeResult(BaseModel):
+    status: Literal["needs_confirmation", "merged"]
+    source: str
+    target: str
+    relations_moved: int
+    duplicate_relations_dropped: int
+    notes_moved: int
+    conflicting_properties: dict[str, dict[str, object]] = Field(
+        default_factory=dict,
+        description="key -> {target, source} where both had a different value; target wins",
+    )
+    message: str
+
+
+class GraphStats(BaseModel):
+    entities: dict[str, int] = Field(description="Live entities by type")
+    relations: dict[str, int] = Field(description="Current (not ended) relations by type")
+    ended_relations: int
+    notes: int
+    inferred_entities: int
+    soft_deleted_entities: int

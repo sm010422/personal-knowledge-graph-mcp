@@ -45,10 +45,15 @@ Pick something else if you want memories extracted automatically from every conv
 | `add_relation` | Connect two entities. If the properties of the same relation change, the old relation is closed and a new one opened |
 | `end_relation` | Mark something as "no longer true" (left a job, stopped using a technology) |
 | `add_note` | Free-text observation attached to an entity |
-| `get_context` | Returns the 1–2 hop subgraph around an entity as Markdown |
+| `get_context` | Returns the 1–2 hop subgraph around an entity as Markdown. Long notes come as a 300-char preview with their id |
+| `get_note` | Full text of one note |
 | `search` | Full-text search over names, aliases, summaries and notes (Korean supported) |
-| `list_entities` | List by type and property filters |
+| `list_entities` | List by type and property filters, or only the ones untouched for N days |
+| `upcoming_events` | Events dated in the next N days (deadlines, interviews), soonest first |
+| `graph_stats` | Counts of entities, relations and notes |
+| `merge_entities` | Fold a duplicate into another entity: relations, notes and aliases move over |
 | `delete_entity` | Preview → soft delete → (when explicit) hard delete |
+| `delete_note` | Preview → delete one note |
 
 Example `get_context` output (fictional data):
 
@@ -167,7 +172,7 @@ The documents under `docs/` are written in Korean.
 - [TODO & notes](docs/TODO.md) — current state, caveats, prioritized to-dos
 - [Deployment & operations guide](docs/deployment.md) — k3s setup, CI, token rotation, rollback, incident response
 - [ADR index](docs/adr/README.md)
-- Devlog: [Phase 1 start](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s deployment](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [Backup & first use](docs/devlog/2026-10-27-backup-and-first-use.md) · [Search AND/OR/NOT bug fix](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [Public polish & first graph audit](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md)
+- Devlog: [Phase 1 start](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s deployment](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [Backup & first use](docs/devlog/2026-10-27-backup-and-first-use.md) · [Search AND/OR/NOT bug fix](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [Public polish & first graph audit](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md) · [Context cost, events & cleanup tools](docs/devlog/2026-11-05-context-cost-events-and-maintenance-tools.md)
 
 ## Roadmap
 

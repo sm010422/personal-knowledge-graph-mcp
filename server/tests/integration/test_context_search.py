@@ -1,7 +1,7 @@
 import pytest
 from neo4j import AsyncDriver
 
-from pkg_mcp.errors import InvalidInput, PolicyViolation
+from pkg_mcp.errors import EntityNotFound, InvalidInput, PolicyViolation
 from pkg_mcp.formatting import render_context
 from pkg_mcp.repository import KnowledgeGraph
 from pkg_mcp.schema import EntityType, RelationType
@@ -109,4 +109,32 @@ async def test_long_verbatim_note_comes_back_unchanged(graph: KnowledgeGraph) ->
     ctx = await graph.get_context("Orbit")
     notes = [n for n in ctx.notes if n.source == "original: cover letter"]
     assert [n.content for n in notes] == [original]
-    assert original in render_context(ctx)
+    assert original in render_context(ctx, full_notes=True)
+    assert (await graph.get_note(notes[0].id)).content == original
+
+    # By default the context shows a preview, so one lookup stays cheap.
+    preview = render_context(ctx)
+    assert original not in preview
+    assert f"[{len(original)} chars, get_note for the full text] (note {notes[0].id})" in preview
+
+
+async def test_note_limit_and_total(graph: KnowledgeGraph) -> None:
+    for i in range(3):
+        await graph.add_note(f"observation {i}", ["Orbit"])
+    ctx = await graph.get_context("Orbit", note_limit=2)
+    assert [n.content for n in ctx.notes] == ["observation 2", "observation 1"]
+    text = render_context(ctx)
+    assert "## Notes (2 of 3, newest first)" in text
+    assert "1 older note(s)" in text
+    assert "not loaded" in render_context(await graph.get_context("Orbit", note_limit=0))
+
+
+async def test_delete_note_needs_confirmation(graph: KnowledgeGraph) -> None:
+    note = await graph.add_note("test note, please ignore", ["Orbit"])
+    preview = await graph.delete_note(note.id, confirm=False)
+    assert preview.status == "needs_confirmation"
+    assert (await graph.get_note(note.id)).content == note.content
+
+    assert (await graph.delete_note(note.id, confirm=True)).status == "deleted"
+    with pytest.raises(EntityNotFound):
+        await graph.get_note(note.id)

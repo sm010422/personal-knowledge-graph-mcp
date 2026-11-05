@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Awaitable
 from datetime import date
 from importlib.metadata import version
 from typing import Annotated, Any, Literal, TypeVar
+from zoneinfo import ZoneInfo
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
@@ -35,11 +36,15 @@ from pkg_mcp.schema import (
     DeleteResult,
     EntityRef,
     EntityType,
+    GraphStats,
+    MergeResult,
+    NoteDeleteResult,
     NoteRef,
     Provenance,
     RelationResult,
     RelationType,
     SearchHit,
+    UpcomingEvent,
     UpsertResult,
 )
 
@@ -68,6 +73,14 @@ Long-term memory about the user, stored as a knowledge graph.
 - A document that already has a home (a file in a repo, a Notion page, a URL) is not
   copied: extract its facts as entities and relations, add a short summary note, and
   put the path or URL in source so the original can be read when needed.
+- Deadlines, interviews, tests and announcements are Events: upsert_entity type=Event
+  with date 'YYYY-MM-DD' and kind, then CONCERNS -> the organization or project.
+  Do not leave dates only inside a relation property; upcoming_events cannot see them.
+- Keep summary to what does not change. Versions, counts and status go in their own
+  properties (latestRelease, status), so one update cannot leave the other stale.
+- Technology entities are what the user and their projects use (KNOWS, USES). A
+  company's stack is a list property on the Organization (techStack), not links.
+- If two entities turn out to be the same thing, merge_entities instead of keeping both.
 """
 
 EntityName = Annotated[
@@ -119,8 +132,9 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         driver = create_driver(cfg)
         state["driver"] = driver
         task = asyncio.create_task(connect(driver, cfg.neo4j_database))
+        tz = ZoneInfo(cfg.display_timezone)
         try:
-            yield {"graph": KnowledgeGraph(driver, cfg.neo4j_database)}
+            yield {"graph": KnowledgeGraph(driver, cfg.neo4j_database, tz)}
         finally:
             task.cancel()
             state.clear()
@@ -184,9 +198,11 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             Field(
                 description="Attributes to set. Keys are camelCase identifiers. Values are "
                 "strings, numbers, booleans or flat lists. Set a value to null to remove it. "
-                "Common keys: Project{status, summary, startedAt, repoUrl}, "
+                "Common keys: Project{status, summary, startedAt, repoUrl, latestRelease}, "
                 "Technology{category}, Decision{rationale, alternatives, decidedAt}, "
-                "Event{date, kind}, Organization{kind}."
+                "Event{date: 'YYYY-MM-DD', kind: deadline|interview|test|announcement}, "
+                "Organization{kind, techStack}. summary is a stable description; put "
+                "numbers that change (versions, counts) in their own keys."
             ),
         ] = {},
         aliases: Annotated[
@@ -220,7 +236,8 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
                 "ATTENDED Person->Event, CONCERNS Event->Project|Organization|Decision, "
                 "COLLABORATED_WITH Person->Person, "
                 "PART_OF Project->Organization (club, bootcamp, course, company), "
-                "RELATED_TO any->any (last resort)."
+                "RELATED_TO any->any (last resort; not for a company's tech stack, "
+                "which is the Organization property techStack)."
             ),
         ],
         to_entity: EntityName,
@@ -335,17 +352,54 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         include_history: Annotated[
             bool, Field(description="Also show ended relations and past property values.")
         ] = False,
+        note_limit: Annotated[
+            int, Field(ge=0, le=20, description="How many of the newest notes to include.")
+        ] = 10,
+        full_notes: Annotated[
+            bool,
+            Field(
+                description="Show long notes in full instead of a 300-char preview. "
+                "Prefer get_note for the one note you need."
+            ),
+        ] = False,
     ) -> str:
         """Everything known about one entity, as Markdown: properties, relations, notes.
 
         Use before answering a question about a specific project, company, technology
         or decision. Use depth=2 for broader questions like "what is my stack across
         projects". If you do not know the exact name, call search first.
+        Long notes are cut to a preview with their id; call get_note(id) when you
+        need the full text, e.g. to quote or edit a stored cover letter.
         """
+        g = await graph(ctx)
         result = await call(
-            (await graph(ctx)).get_context(entity_name, depth, None, include_history)
+            g.get_context(entity_name, depth, None, include_history, note_limit=note_limit)
         )
-        return render_context(result)
+        return render_context(result, g.tz, full_notes)
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def get_note(
+        ctx: Context,
+        note_id: Annotated[str, Field(description="Note id from get_context or search.")],
+    ) -> NoteRef:
+        """The full text of one note, with the entities it is about.
+
+        get_context shows long notes as a 300-char preview and search as 200 chars.
+        Call this when you need the whole thing, e.g. a stored cover letter.
+        """
+        return await call((await graph(ctx)).get_note(note_id))
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def upcoming_events(
+        ctx: Context,
+        days: Annotated[int, Field(ge=1, le=366, description="How far ahead to look.")] = 14,
+    ) -> list[UpcomingEvent]:
+        """Events dated from today through the next `days` days, soonest first.
+
+        Use for "what's due this week", "any deadlines this month", or before
+        planning the user's time. Only Event entities with a date property appear.
+        """
+        return await call((await graph(ctx)).upcoming_events(days))
 
     @mcp.tool(annotations={"readOnlyHint": True})
     async def search(
@@ -373,13 +427,35 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             Field(description="Exact property matches, e.g. {status: 'active'}."),
         ] = {},
         limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        not_updated_for_days: Annotated[
+            int | None,
+            Field(
+                ge=1,
+                description="Only entities with no property change, note or relation for "
+                "this many days, stalest first.",
+            ),
+        ] = None,
     ) -> list[EntityRef]:
         """List entities of a type, most recently updated first.
 
         Use for enumerations: "what projects am I running", "which companies did I
         apply to". For a single entity's details use get_context instead.
+        To find records that may have gone stale, combine filters={status: 'active'}
+        with not_updated_for_days=30 and ask the user whether they are still current.
         """
-        return await call((await graph(ctx)).list_entities(type, filters, limit))
+        return await call(
+            (await graph(ctx)).list_entities(
+                type, filters, limit, not_updated_for_days=not_updated_for_days
+            )
+        )
+
+    @mcp.tool(annotations={"readOnlyHint": True})
+    async def graph_stats(ctx: Context) -> GraphStats:
+        """Counts of entities by type, relations by type, notes and deleted items.
+
+        Use when the user asks how much is stored, or to spot gaps (e.g. no Events).
+        """
+        return await call((await graph(ctx)).stats())
 
     @mcp.tool(annotations={"destructiveHint": True})
     async def delete_entity(
@@ -407,6 +483,39 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         with the user.
         """
         return await call((await graph(ctx)).delete_entity(entity_name, confirm, hard))
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    async def delete_note(
+        ctx: Context,
+        note_id: Annotated[str, Field(description="Note id from get_context or search.")],
+        confirm: Annotated[
+            bool, Field(description="false = preview the note; true = delete it permanently.")
+        ] = False,
+    ) -> NoteDeleteResult:
+        """Delete one note: a test note, a mistake, or an outdated copy being replaced.
+
+        Notes cannot be edited. To correct one, add_note the new version first, then
+        delete the old one. Call with confirm=false first and confirm with the user.
+        """
+        return await call((await graph(ctx)).delete_note(note_id, confirm))
+
+    @mcp.tool(annotations={"destructiveHint": True})
+    async def merge_entities(
+        ctx: Context,
+        source: Annotated[str, Field(description="The duplicate to fold away (Type:name).")],
+        target: Annotated[str, Field(description="The entity to keep (Type:name).")],
+        confirm: Annotated[
+            bool, Field(description="false = preview what moves; true = merge.")
+        ] = False,
+    ) -> MergeResult:
+        """Fold a duplicate entity into another of the same type.
+
+        Relations and notes move to the target, the source's name becomes an alias,
+        and properties the target lacks are copied (the target wins on conflicts).
+        The source is then deleted; the merge is recorded in the target's history.
+        Call with confirm=false first, show the preview, and confirm with the user.
+        """
+        return await call((await graph(ctx)).merge_entities(source, target, confirm))
 
     return mcp
 

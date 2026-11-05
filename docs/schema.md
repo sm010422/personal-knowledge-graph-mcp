@@ -7,11 +7,18 @@
 | 타입 | 용도 | 자주 쓰는 속성 |
 |---|---|---|
 | `Person` | 나 자신, 협업자 | `isSelf`, `role` |
-| `Project` | 프로젝트 | `status`, `summary`, `startedAt`, `repoUrl` |
+| `Project` | 프로젝트 | `status`, `summary`, `startedAt`, `repoUrl`, `latestRelease` |
 | `Technology` | 기술·스킬 (초안의 Skill과 통합) | `category` |
 | `Decision` | 설계/커리어 결정 | `rationale`, `alternatives`, `decidedAt` |
-| `Event` | 면접·지원·마감·릴리즈 | `date`, `kind` |
-| `Organization` | 회사·학교·동아리 | `kind` |
+| `Event` | 면접·지원·마감·릴리즈 | `date`(`YYYY-MM-DD`로 시작, 검증함), `kind` |
+| `Organization` | 회사·학교·동아리 | `kind`, `techStack` |
+
+작성 규칙 (툴 description에도 들어 있다):
+
+- **`summary`에는 잘 안 바뀌는 설명만 쓴다.** 버전, 개수, 상태는 전용 속성(`latestRelease`, `status`)에 둔다. 두 곳에 같은 숫자가 있으면 한쪽만 고쳐지고 어긋난다.
+- **마감·면접·과제·발표는 `Event`로 만들고 `CONCERNS`로 회사·프로젝트에 잇는다.** 관계 속성 안의 날짜 문자열(`deadline: 2026-11-15`)은 `upcoming_events`가 찾지 못한다.
+- **`Technology`는 사용자와 사용자의 프로젝트가 쓰는 것만 만든다(`KNOWS`, `USES`).** 회사 기술 스택은 Organization의 `techStack` 목록 속성으로 둔다. 회사 스택을 Technology로 만들면 "내 스택" 질문에 섞여 들어온다.
+- 같은 대상이 두 엔티티로 생기면 `merge_entities`로 합친다. 관계·노트가 옮겨 가고, 없어지는 쪽 이름은 alias가 되며, 합친 기록은 남는 쪽 Revision에 `mergedFrom`으로 남는다.
 
 ### 공통(내부) 속성
 
@@ -30,7 +37,9 @@
 - `(:Note {id, content, source, provenance, createdAt})-[:ABOUT]->(:Entity)` — 자유 텍스트 관찰. 최소 1개 엔티티에 연결해야 한다.
   - **원문 보존**: 사용자가 다른 곳에 원본이 없는 완성된 문서(제출한 자기소개서, 이력서 등)를 주거나 "그대로 남겨 달라"고 하면, 전문을 고치지 않고 노트 하나에 넣는다. `source`는 `original: <제목>`이다. 가장 구체적인 엔티티(예: 그 자소서를 낸 회사)에 붙이고, 본인 Person 노드에는 붙이지 않는다. 본인 노드에 붙이면 본인에 대한 `get_context`마다 전문이 딸려 나온다. 문서 속 사실(지원 회사·직무, 프로젝트, 기술)은 별도로 엔티티·관계로 뽑는다.
   - **원본이 따로 있는 문서**(레포 파일, 노션 페이지, URL)는 복사하지 않는다. 사실은 엔티티·관계로 뽑고, 짧은 요약 노트의 `source`에 경로나 URL을 적는다(예: `docs/devlog/2026-11-02-...md`). 원문이 필요하면 그 경로를 직접 읽는다. 복사본은 원본이 바뀌면 낡고, 노트는 수정할 수 없어서 구버전과 신버전이 함께 남기 때문이다. KG는 원문 저장소가 아니라 "무엇이 어디에 있는지" 아는 색인이다.
-  - 저장 시 앞뒤 공백만 잘린다. 본문의 줄바꿈·들여쓰기는 그대로다. `get_context`는 노트를 전문으로(엔티티당 최신 20개), `search`는 200자 미리보기로 돌려준다.
+  - 저장 시 앞뒤 공백만 잘린다. 본문의 줄바꿈·들여쓰기는 그대로다.
+  - 읽기: `get_context`는 최신 10개(`note_limit`, 최대 20)를 보여 주고, 300자가 넘는 노트는 미리보기와 id만 준다. 전문은 `get_note(id)`로 받는다. `search`는 200자 미리보기다. 긴 원문 하나가 그 엔티티를 조회할 때마다 수천 토큰씩 딸려 오는 것을 막기 위해서다.
+  - 노트는 수정하지 않는다. 고칠 때는 새 노트를 넣고 이전 것을 `delete_note`로 지운다(미리보기 → 확인 → 삭제).
 - `(:Revision {changedAt, changes, provenance})-[:REVISION_OF]->(:Entity)` — 속성 변경 이력. `changes`는 `{"status": {"before": "planning", "after": "active"}}` 형태의 JSON 문자열이다(Neo4j는 map을 속성으로 저장할 수 없다).
 
 ## 관계

@@ -45,10 +45,15 @@ flowchart LR
 | `add_relation` | 두 엔티티 연결. 같은 관계의 속성이 바뀌면 이전 관계를 닫고 새로 엶 |
 | `end_relation` | "더 이상 사실이 아님" 표시 (퇴사, 기술 사용 중단) |
 | `add_note` | 엔티티에 붙는 자유 텍스트 관찰 |
-| `get_context` | 엔티티 주변 1~2단계 서브그래프를 Markdown으로 반환 |
+| `get_context` | 엔티티 주변 1~2단계 서브그래프를 Markdown으로 반환. 긴 노트는 300자 미리보기와 id만 |
+| `get_note` | 노트 하나의 전문 |
 | `search` | 이름·alias·요약·노트 전문 검색 (한국어 지원) |
-| `list_entities` | 타입·속성 조건으로 나열 |
+| `list_entities` | 타입·속성 조건으로 나열, 또는 N일 넘게 안 바뀐 것만 |
+| `upcoming_events` | 앞으로 N일 안의 Event(마감·면접)를 가까운 순으로 |
+| `graph_stats` | 엔티티·관계·노트 개수 |
+| `merge_entities` | 중복 엔티티를 다른 쪽으로 합침. 관계·노트·alias가 옮겨 감 |
 | `delete_entity` | 미리보기 → soft delete → (명시 시) hard delete |
+| `delete_note` | 미리보기 → 노트 하나 삭제 |
 
 `get_context` 출력 예 (가상 데이터):
 
@@ -165,7 +170,7 @@ scripts/quickstart.sh     .env 생성 후 docker compose 실행
 - [할 일 · 알아둘 점](docs/TODO.md) — 현재 상태, 주의사항, 우선순위별 할 일
 - [배포·운영 가이드](docs/deployment.md) — k3s 구성, CI, 토큰 교체, 롤백, 장애 대응
 - [ADR 목록](docs/adr/README.md)
-- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [백업·첫 사용](docs/devlog/2026-10-27-backup-and-first-use.md) · [검색 AND/OR/NOT 버그 수정](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [공개 정비·첫 그래프 점검](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md)
+- 진행 기록: [Phase 1 시작](docs/devlog/2026-10-19-phase1-bootstrap.md) · [Phase 2 k3s 배포](docs/devlog/2026-10-19-phase2-k3s-deployment.md) · [백업·첫 사용](docs/devlog/2026-10-27-backup-and-first-use.md) · [검색 AND/OR/NOT 버그 수정](docs/devlog/2026-11-02-lucene-operator-search-bug.md) · [공개 정비·첫 그래프 점검](docs/devlog/2026-11-02-public-polish-and-first-graph-audit.md) · [조회 비용·일정·정리 도구](docs/devlog/2026-11-05-context-cost-events-and-maintenance-tools.md)
 
 ## 로드맵
 

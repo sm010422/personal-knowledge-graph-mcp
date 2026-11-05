@@ -1,6 +1,7 @@
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,9 +25,19 @@ class Settings(BaseSettings):
     mcp_auth_token: SecretStr | None = None
     mcp_auth_token_next: SecretStr | None = None
 
+    # Time zone for dates shown to the model and for "today" (relation dates, upcoming
+    # events). Stored timestamps stay UTC.
+    display_timezone: str = "UTC"
+
     # Error reporting (pkg_mcp.observability). Unset = off.
     sentry_dsn: SecretStr | None = None
     sentry_environment: str = "local"
+
+    @field_validator("display_timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        ZoneInfo(value)  # raises for an unknown name, so a typo fails at startup
+        return value
 
     def auth_tokens(self) -> list[str]:
         return [t.get_secret_value() for t in (self.mcp_auth_token, self.mcp_auth_token_next) if t]

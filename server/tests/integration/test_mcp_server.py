@@ -20,6 +20,11 @@ EXPECTED_TOOLS = {
     "search",
     "list_entities",
     "delete_entity",
+    "get_note",
+    "delete_note",
+    "upcoming_events",
+    "graph_stats",
+    "merge_entities",
 }
 
 

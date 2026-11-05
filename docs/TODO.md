@@ -103,7 +103,7 @@ cd /Users/parksangmin/coding/portfolio/personal-knowledge-graph-mcp
 source .env.remote
 claude mcp add --transport http personal-kg "$MCP_URL" --header "Authorization: Bearer $MCP_AUTH_TOKEN"
 ```
-- [x] user scope로 등록, `claude mcp list` ✔ Connected, `tools/list` 8개 확인 (2026-10-27)
+- [x] user scope로 등록, `claude mcp list` ✔ Connected, `tools/list` 8개 확인 (2026-10-27, 2026-11-05부터 13개)
 - [x] 로컬 stdio 서버는 등록하지 않음. 원격 하나만 사용
 
 ### 4. 실사용하면서 툴 description 다듬기 **[나 + Claude]**

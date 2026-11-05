@@ -2,8 +2,40 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, tzinfo
+
 from pkg_mcp.repository import ContextGraph
-from pkg_mcp.schema import RelationRef
+from pkg_mcp.schema import NoteRef, RelationRef
+
+# Long notes (a verbatim cover letter can be 5,000 chars) are cut to this in
+# get_context so one lookup does not cost thousands of tokens; get_note has the rest.
+NOTE_PREVIEW_CHARS = 300
+
+
+def local_time(timestamp: str | None, tz: tzinfo, fmt: str = "%Y-%m-%d %H:%M %Z") -> str:
+    """Show a stored UTC timestamp in the user's time zone."""
+    if not timestamp:
+        return "?"
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return timestamp
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(tz).strftime(fmt)
+
+
+def _fmt_note(note: NoteRef, center_label: str, tz: tzinfo, full: bool) -> str:
+    others = [a for a in note.about if a != center_label]
+    also = f" (also about {', '.join(others)})" if others else ""
+    body = note.content
+    if not full and len(body) > NOTE_PREVIEW_CHARS:
+        body = (
+            f"{body[:NOTE_PREVIEW_CHARS].rstrip()}… [{len(note.content)} chars, "
+            "get_note for the full text]"
+        )
+    day = local_time(note.created_at, tz, "%Y-%m-%d")
+    return f"- {day} [{note.source}] {body}{also} (note {note.id})"
 
 
 def _fmt_value(value: object) -> str:
@@ -31,7 +63,7 @@ def _fmt_relation(rel: RelationRef, center_label: str) -> str:
     )
 
 
-def render_context(graph: ContextGraph) -> str:
+def render_context(graph: ContextGraph, tz: tzinfo = UTC, full_notes: bool = False) -> str:
     c = graph.center
     center_label = f"{c.type.value}:{c.name}"
     lines = [f"# {c.type.value}: {c.name}"]
@@ -41,7 +73,9 @@ def render_context(graph: ContextGraph) -> str:
         lines.append(f"- {key}: {_fmt_value(value)}")
     if c.provenance == "inferred":
         lines.append("- (inferred by an assistant, not stated by the user)")
-    lines.append(f"_created {c.created_at}, updated {c.updated_at}_")
+    lines.append(
+        f"_created {local_time(c.created_at, tz)}, updated {local_time(c.updated_at, tz)}_"
+    )
 
     direct = [e.relation for e in graph.edges if e.touches_center]
     indirect = [e.relation for e in graph.edges if not e.touches_center]
@@ -53,13 +87,15 @@ def render_context(graph: ContextGraph) -> str:
     if graph.truncated:
         lines.append("- … more relations omitted; ask about a neighbor directly.")
 
+    total = max(graph.note_total, len(graph.notes))
     if graph.notes:
-        lines += ["", f"## Notes ({len(graph.notes)}, newest first)"]
-        for note in graph.notes:
-            day = (note.created_at or "")[:10]
-            others = [a for a in note.about if a != center_label]
-            also = f" (also about {', '.join(others)})" if others else ""
-            lines.append(f"- {day} [{note.source}] {note.content}{also}")
+        shown = f"{len(graph.notes)} of {total}" if total > len(graph.notes) else f"{total}"
+        lines += ["", f"## Notes ({shown}, newest first)"]
+        lines += [_fmt_note(n, center_label, tz, full_notes) for n in graph.notes]
+        if total > len(graph.notes):
+            lines.append(f"- … {total - len(graph.notes)} older note(s); raise note_limit.")
+    elif total:
+        lines += ["", f"## Notes ({total}, not loaded; raise note_limit to see them)"]
 
     if graph.revisions:
         lines += ["", "## Property history"]
@@ -68,6 +104,6 @@ def render_context(graph: ContextGraph) -> str:
                 f"{k}: {_fmt_value(v['before'])} -> {_fmt_value(v['after'])}"
                 for k, v in rev["changes"].items()
             )
-            lines.append(f"- {rev['changed_at'][:10]} {changes}")
+            lines.append(f"- {local_time(rev['changed_at'], tz, '%Y-%m-%d')} {changes}")
 
     return "\n".join(lines)
