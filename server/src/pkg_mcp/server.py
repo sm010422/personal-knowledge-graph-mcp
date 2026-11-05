@@ -61,10 +61,13 @@ Long-term memory about the user, stored as a knowledge graph.
 - Never store health, financial, credential or ID-number information.
 - Set provenance="inferred" when you are recording something the user implied
   rather than said.
-- When the user hands over a finished document (cover letter, resume, essay) or asks
-  to keep text as written, store it verbatim in one add_note and never paraphrase it.
-  Then extract entities and relations from it separately. Facts mentioned in passing
-  in conversation may still be condensed.
+- When the user hands over a finished document (cover letter, resume, essay) that
+  lives nowhere else, or asks to keep text as written, store it verbatim in one
+  add_note and never paraphrase it. Then extract entities and relations from it
+  separately. Facts mentioned in passing in conversation may still be condensed.
+- A document that already has a home (a file in a repo, a Notion page, a URL) is not
+  copied: extract its facts as entities and relations, add a short summary note, and
+  put the path or URL in source so the original can be read when needed.
 """
 
 EntityName = Annotated[
@@ -294,7 +297,8 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
             str,
             Field(
                 description="Where this came from, e.g. 'claude-code session', or "
-                "'original: <document title>' for a verbatim document."
+                "'original: <document title>' for a verbatim document, or the file "
+                "path / URL of a document summarized instead of copied."
             ),
         ] = "conversation",
         provenance: ProvenanceArg = "user",
@@ -305,12 +309,18 @@ def create_server(settings: Settings | None = None, auth: AuthProvider | None = 
         If the fact has a clear shape (a status, a date, a link between two things),
         use upsert_entity or add_relation instead so it can be queried.
 
-        Verbatim originals: when the user provides a finished document or asks to keep
-        text as written, put the full text in content unchanged (no summary, no fixes),
-        set source to "original: <title>", and attach it to the most specific entity,
-        not the user's own Person node, so it does not flood every get_context about
-        them. Record the structured facts in it with separate upsert_entity /
-        add_relation calls. get_context returns notes in full; search shows 200 chars.
+        Verbatim originals: when the user provides a finished document that is stored
+        nowhere else, or asks to keep text as written, put the full text in content
+        unchanged (no summary, no fixes), set source to "original: <title>", and
+        attach it to the most specific entity, not the user's own Person node, so it
+        does not flood every get_context about them. Record the structured facts in
+        it with separate upsert_entity / add_relation calls. get_context returns notes
+        in full; search shows 200 chars.
+
+        Documents with a home elsewhere (repo file, Notion page, URL): do not copy
+        them. Add a short summary note with the path or URL as source, e.g.
+        source="docs/devlog/2026-11-02-search-bug.md", and extract the facts. A copy
+        goes stale when the original changes, and notes cannot be edited.
         """
         return await call((await graph(ctx)).add_note(content, about_entities, source, provenance))
 
